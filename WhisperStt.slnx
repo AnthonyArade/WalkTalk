@@ -1,0 +1,11 @@
+﻿<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WhisperStt.Cli/WhisperStt.Cli.csproj" />
+    <Project Path="src/WhisperStt.Core/WhisperStt.Core.csproj" />
+    <Project Path="src/WhisperStt.Desktop/WhisperStt.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ModelChecks/ModelChecks.csproj" />
+    <Project Path="tests/UiChecks/UiChecks.csproj" />
+  </Folder>
+</Solution>

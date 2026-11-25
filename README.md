@@ -1,1 +1,129 @@
 # WalkTalk
+
+Offline speech-to-text for Windows. Speak, and WalkTalk types what you said into the text fields of other apps: a chat box, a browser, Notepad, VRChat's chatbox or Twitch chat. Speech recognition runs on your own PC with [Whisper](https://github.com/openai/whisper), on the GPU when there is one, and no audio ever leaves the computer.
+
+WalkTalk can also learn your voice: read a set of sentences aloud and it retrains its speech model on your accent and the way you pronounce words.
+
+## Features
+
+- **Live dictation.** Each sentence is written out as soon as you pause, into every field you switched on.
+- **Any app.** Click "Add field", then click a text box in any app. WalkTalk remembers it and writes there, optionally pressing Enter after each sentence.
+- **VRChat chatbox.** Sends each sentence to VRChat through OSC (127.0.0.1:9000), with the typing bubble while you speak.
+- **Twitch chat.** Connect your Twitch account (OAuth, in your browser) and each sentence is posted in the channel of your choice. The sign-in is stored encrypted for your Windows account only.
+- **Voice commands.** Say "Clean" to empty the fields, or "Send" / "Enter" to press Enter.
+- **Word hints.** Names and terms Whisper should spell exactly (usernames, games, jargon).
+- **Word replacements.** Search the words the model knows and write something else in their place: an abbreviation, slang, an emoji.
+- **Read aloud (TTS).** Optionally reads each sentence back with a natural Kokoro voice, also offline.
+- **Voice training.** Retrains the model on your recordings so it understands your accent better (see below).
+- **Dark and light themes.**
+
+## Requirements
+
+- Windows 10 (1809) or later, 64-bit
+- A microphone
+- Internet the first time, to download the speech model (about 1.6 GB). Dictation then works offline.
+- Optional: a GPU with Vulkan support (NVIDIA, AMD or Intel) for fast transcription. Without one, WalkTalk runs on the CPU.
+- Voice training only: an NVIDIA graphics card with at least 3.5 GB of memory and an up-to-date driver.
+
+## Install
+
+1. Download `WalkTalk-Setup-<version>.exe` from the Releases page.
+2. Run it. It installs for your Windows account only and needs no administrator rights.
+
+The installer is not code-signed yet, so Windows SmartScreen may warn "Windows protected your PC". Choose **More info**, then **Run anyway**.
+
+Everything the app needs is in the installer. These larger parts download the first time they are needed:
+
+| What | When | Size |
+|---|---|---|
+| Speech model (turbo) | first Start listening | about 1.6 GB |
+| Text-to-speech voices | first time TTS is turned on | 334 MB |
+| Training tools (a private Python with PyTorch) | first voice training | about 5 GB |
+
+Models, settings and recordings are kept in `%LOCALAPPDATA%\WhisperStt`. Uninstalling asks whether to delete them.
+
+## Getting started
+
+1. Pick your microphone, a model and your language in the toolbar.
+2. Click **Add field**, then click the text box you want to write into, in any app.
+3. Click **Start listening** and speak. Pause briefly at the end of each sentence.
+
+Click **Stop** when you are done: the model is unloaded to free the graphics card for games and other apps.
+
+### Models
+
+| Model | Size | Notes |
+|---|---|---|
+| tiny, base | 75 to 150 MB | fastest, least accurate |
+| small | 490 MB | a good choice on the CPU |
+| medium | 1.5 GB | |
+| turbo | 1.6 GB | the default: fast on a GPU and accurate |
+| large | 3.1 GB | most accurate, slowest |
+| my voice | | appears once you have trained a voice model |
+
+## Voice training
+
+Voice training adapts the speech model to how *you* speak, which helps most with accents and words you pronounce your own way.
+
+1. Open **Voice training** (stop listening first).
+2. Choose your language and how many sentences to use (20% to 100%, with the estimated training time for each).
+3. Read the sentences aloud. You can stop and continue later. You can also add sentences of your own, with names and words you really say.
+4. Click **Train my voice model**. A full training takes about 10 minutes on an 8 GB RTX 3050.
+5. WalkTalk shows the standard model and your trained model side by side on sentences kept apart for the test. Use the new model only if you like the result.
+
+**How it works:** WalkTalk trains small LoRA adapters on Whisper's attention layers with your recordings, then merges them into a normal Whisper model file. One sentence in five is held back first to find how long to train before the model starts memorising; then it trains again on every recording.
+
+**Fixing mistakes as you go:** while you dictate with your voice model, the ten latest sentences show a **Review** button. If one was written wrong, press it, type what you actually said and save. Then press **Teach my voice model**: a short training of a minute or two adds the correction to your model. For a word that keeps coming out wrong, correct it a few times; each recording is a little different, and that is what teaches the model the word.
+
+Everything stays on your PC: recordings, training and the resulting model.
+
+## Building from source
+
+Requirements:
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- [Inno Setup 6](https://jrsoftware.org/isinfo.php), for the installer only (`winget install JRSoftware.InnoSetup`)
+
+```powershell
+# Build everything
+dotnet build WhisperStt.slnx -c Release
+
+# Run the app
+dotnet run --project src\WhisperStt.Desktop
+
+# Build the installer: publishes into publish\app, then creates publish\WalkTalk-Setup-<version>.exe
+.\build-installer.ps1
+```
+
+### Project layout
+
+| Folder | What it is |
+|---|---|
+| `src/WhisperStt.Core` | Speech recognition, microphone, voice detection, models, voice training, VRChat and Twitch |
+| `src/WhisperStt.Desktop` | The WPF app (WalkTalk) |
+| `src/WhisperStt.Cli` | A small command-line tool: transcribe a file or record from the microphone |
+| `tests/UiChecks` | Drives the real window off-screen on a sandbox copy of the data, and saves screenshots |
+| `tests/ModelChecks` | Compares how models write one recording and altered copies of it |
+| `installer` | The Inno Setup script |
+
+The test tools never touch your real settings or recordings: they work on folders you give them. See the top of each `Program.cs` for usage.
+
+### Built with
+
+- [Whisper.net](https://github.com/sandrohanea/whisper.net) (whisper.cpp) with the Vulkan runtime, and the Silero voice detector
+- [NAudio](https://github.com/naudio/NAudio) for the microphone
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) with [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) for text-to-speech
+- [PyTorch](https://pytorch.org) and [openai-whisper](https://github.com/openai/whisper) for voice training
+
+## Privacy
+
+- Speech recognition, text-to-speech and voice training run entirely on your PC.
+- Nothing you say is sent anywhere, except the text you choose to send to Twitch chat or VRChat.
+- The only internet connections are the model and tool downloads, and Twitch when you connect it.
+
+## Known limitations
+
+- Windows only.
+- Voice training needs an NVIDIA graphics card.
+- The installer and app are not code-signed, so SmartScreen or Smart App Control may warn about or block them.
+- A voice command only works when said on its own: pause briefly before and after it.

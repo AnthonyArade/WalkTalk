@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Apps that use this library must also reference Whisper.net.Runtime (and .Vulkan for GPU):
+       its native binaries are copied by build targets, which don't flow to referencing projects. -->
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="3.3.0" />
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <!-- Kokoro text-to-speech. Stays on 1.x: 2.0 dropped espeak-ng, so words missing from the
+         dictionary (usernames, game names) would be silently skipped instead of pronounced. -->
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.8" />
+  </ItemGroup>
+
+  <!-- The Visual C++ runtime Whisper's native libraries need, for PCs that don't have it (see NativeRuntime).
+       Copied into a Native folder beside every app that uses this library. Kept in a folder of its own so
+       that Windows' own, up-to-date copy is found first when there is one. -->
+  <ItemGroup>
+    <Content Include="Native\*.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- The voice training script, run with the training kit's Python. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Training\train.py" LogicalName="WhisperStt.Core.Training.train.py" />
+  </ItemGroup>
+
+</Project>

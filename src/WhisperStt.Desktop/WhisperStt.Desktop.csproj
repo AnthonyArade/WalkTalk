@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>WalkTalk</AssemblyName>
+    <Product>WalkTalk</Product>
+    <Version>1.0.0</Version> <!-- shown by the installer; raise it for each release so setups upgrade in place -->
+    <AssemblyTitle>WalkTalk</AssemblyTitle> <!-- the name Task Manager shows -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Assets\WalkTalk.ico is generated from Assets\WalkTalk.svg (16-256 px, rendered by Chrome). -->
+    <ApplicationIcon>Assets\WalkTalk.ico</ApplicationIcon>
+    <!-- Application.ThemeMode (Windows 11 Fluent theme) is still marked experimental. -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+    <!-- GPU acceleration through Vulkan: works with any recent NVIDIA/AMD/Intel driver, nothing else to install.
+         (The CUDA runtime is left out on purpose: without the CUDA toolkit installed it crashes instead of falling back.) -->
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\WalkTalk.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WhisperStt.Core\WhisperStt.Core.csproj" />
+  </ItemGroup>
+
+</Project>

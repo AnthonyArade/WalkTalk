@@ -1,0 +1,11 @@
+<Project>
+  <!-- Whisper.net runtimes copy native Windows libraries for every CPU type
+       (runtimes/win-arm64/..., runtimes/vulkan/win-x86/...). When building for a specific
+       runtime (e.g. publishing win-x64), keep only that one. -->
+  <Target Name="KeepOnlyTargetWhisperRuntime" BeforeTargets="AssignTargetPaths" Condition="'$(RuntimeIdentifier)' != ''">
+    <ItemGroup>
+      <None Remove="@(None)"
+            Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(None.TargetPath)', '^runtimes/([^/]+/)?win-')) and !$([System.Text.RegularExpressions.Regex]::IsMatch('%(None.TargetPath)', '^runtimes/([^/]+/)?$(RuntimeIdentifier)/'))" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -1,0 +1,72 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+      Light theme in the WalkTalk brand colors:
+      sky blue #0593C6 (main color), white #FCFFFF (secondary), hot pink #D83995 (accent).
+      Text shades of blue, pink, green and red are darker than the fills so small text stays
+      readable on white. Every key here must also exist in Dark.xaml.
+    -->
+
+    <!-- Surfaces -->
+    <SolidColorBrush x:Key="WindowBrush" Color="#FFEEF5F9" />     <!-- fallback when Mica is unavailable -->
+    <SolidColorBrush x:Key="SidebarBrush" Color="#0F0593C6" />    <!-- a breath of sky blue on the chrome -->
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFCFFFF" />    <!-- white content well -->
+    <SolidColorBrush x:Key="PanelBrush" Color="#FFFCFFFF" />
+    <SolidColorBrush x:Key="CardBrush" Color="#120B3A4D" />
+    <SolidColorBrush x:Key="CardHoverBrush" Color="#1F0B3A4D" />
+    <SolidColorBrush x:Key="InsetBrush" Color="#120B3A4D" />
+    <SolidColorBrush x:Key="StrokeBrush" Color="#260B3A4D" />
+    <SolidColorBrush x:Key="SeparatorBrush" Color="#1A0B3A4D" />
+    <SolidColorBrush x:Key="DialogBrush" Color="#FFFCFFFF" />
+    <SolidColorBrush x:Key="DialogStrokeBrush" Color="#260B3A4D" />
+    <SolidColorBrush x:Key="ToastBrush" Color="#FFFCFFFF" />
+    <SolidColorBrush x:Key="ScrimBrush" Color="#590B2A3A" />
+
+    <!-- Labels: deep blue-gray text -->
+    <SolidColorBrush x:Key="TextBrush" Color="#FF10212B" />
+    <SolidColorBrush x:Key="MutedBrush" Color="#FF52626C" />
+    <SolidColorBrush x:Key="TertiaryBrush" Color="#FF8796A0" />
+
+    <!-- Main color: sky blue. AccentHoverBrush is darker, for hover and for blue text on white. -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#FF0593C6" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#FF03729B" />
+    <SolidColorBrush x:Key="AccentTintBrush" Color="#1F0593C6" />
+    <SolidColorBrush x:Key="AccentTintHoverBrush" Color="#330593C6" />
+    <SolidColorBrush x:Key="AccentStrokeBrush" Color="#800593C6" />
+    <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFCFFFF" />
+
+    <!-- Accent: hot pink marks what is live (hearing you, reading aloud, Auto-Enter on) -->
+    <SolidColorBrush x:Key="SpeakingBrush" Color="#FFD83995" />
+    <SolidColorBrush x:Key="HighlightBrush" Color="#FFD83995" />
+    <SolidColorBrush x:Key="PulseBrush" Color="#FFD83995" />
+    <SolidColorBrush x:Key="ToggleOnBrush" Color="#21D83995" />
+    <SolidColorBrush x:Key="ToggleOnTextBrush" Color="#FFAD1F72" />
+    <SolidColorBrush x:Key="SwitchOnBrush" Color="#FF0593C6" />
+    <SolidColorBrush x:Key="SwitchOffBrush" Color="#330B3A4D" />
+    <SolidColorBrush x:Key="SliderTrackBrush" Color="#330B3A4D" />
+
+    <!-- Chrome: sky blue is the main color. Title bar, toolbar and sidebar are sky blue with white on top. -->
+    <SolidColorBrush x:Key="ChromeBrush" Color="#FF0593C6" />
+    <SolidColorBrush x:Key="ChromeTextBrush" Color="#FFFCFFFF" />
+    <SolidColorBrush x:Key="ChromeMutedBrush" Color="#D9FCFFFF" />
+    <SolidColorBrush x:Key="ChromeButtonBrush" Color="#33FCFFFF" />
+    <SolidColorBrush x:Key="ChromeButtonHoverBrush" Color="#4DFCFFFF" />
+    <SolidColorBrush x:Key="ChromeButtonTextBrush" Color="#FFFCFFFF" />
+    <SolidColorBrush x:Key="ChromeButtonIconBrush" Color="#FFFCFFFF" />
+    <SolidColorBrush x:Key="ChromePrimaryBrush" Color="#FFFCFFFF" />       <!-- white button on the blue -->
+    <SolidColorBrush x:Key="ChromePrimaryHoverBrush" Color="#FFE3F4FB" />
+    <SolidColorBrush x:Key="ChromePrimaryTextBrush" Color="#FF0480B0" />   <!-- sky blue, a shade darker to read on white -->
+    <SolidColorBrush x:Key="ChromeTintBrush" Color="#FFFCFFFF" />
+    <SolidColorBrush x:Key="ChromeTintHoverBrush" Color="#FFE3F4FB" />
+    <SolidColorBrush x:Key="ChromeTintTextBrush" Color="#FF0480B0" />
+    <SolidColorBrush x:Key="SidebarCardBrush" Color="#FFFCFFFF" />         <!-- white field cards on the blue -->
+    <SolidColorBrush x:Key="SidebarCardHoverBrush" Color="#FFF0F8FC" />
+    <SolidColorBrush x:Key="PickBannerBrush" Color="#FFFCFFFF" />
+    <SolidColorBrush x:Key="PickBannerStrokeBrush" Color="#FFD83995" />    <!-- hot pink: waiting for your click -->
+
+    <!-- Status: green = done, red = stop / error (darker shades for white backgrounds) -->
+    <SolidColorBrush x:Key="SuccessBrush" Color="#FF1E9E4A" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#FFD93025" />
+    <SolidColorBrush x:Key="DangerHoverBrush" Color="#FFB3261E" />
+    <SolidColorBrush x:Key="DangerTintBrush" Color="#1FD93025" />
+</ResourceDictionary>

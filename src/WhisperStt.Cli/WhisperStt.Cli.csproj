@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>WalkTalk-cli</AssemblyName>
+    <Product>WalkTalk</Product>
+    <Version>1.0.0</Version>
+    <AssemblyTitle>WalkTalk (command line)</AssemblyTitle>
+    <ApplicationIcon>..\WhisperStt.Desktop\Assets\WalkTalk.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+    <!-- GPU acceleration; see WhisperStt.Desktop.csproj. -->
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WhisperStt.Core\WhisperStt.Core.csproj" />
+  </ItemGroup>
+
+</Project>

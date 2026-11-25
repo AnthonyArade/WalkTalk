@@ -1,0 +1,14 @@
+# Build output
+bin/
+obj/
+publish/
+
+# Visual Studio and Rider
+.vs/
+.idea/
+*.user
+*.suo
+
+# Python caches (voice training script)
+__pycache__/
+*.pyc
