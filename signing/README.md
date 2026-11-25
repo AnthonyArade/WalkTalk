@@ -71,5 +71,5 @@ the tag: add `refs/tags/v*` (or `v*`) there.
 | the app folder, as a zip | `WalkTalk.exe`, `WalkTalk.dll`, `WhisperStt.Core.dll` |
 | the setup exe itself | `WalkTalk-Setup-<version>.exe` |
 
-SignPath checks that each signed file says product "WalkTalk".
+SignPath checks that the app's signed files say product "WalkTalk". (The setup exe is not checked: Inno Setup pads its product name with spaces.)
 The other files (.NET, Whisper, the Microsoft runtime) are not WalkTalk's own and are left as they are.

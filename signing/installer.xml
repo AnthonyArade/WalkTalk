@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SignPath artifact configuration "installer": the setup exe itself (WalkTalk-Setup-<version>.exe), as the
      build sends it and as it is uploaded by hand.
-     Inno Setup pads the setup exe's product name with spaces ("WalkTalk      "). If SignPath rejects the
-     file over it, its error says so: then remove product-name below. -->
+     No product-name check here: Inno Setup always pads the setup exe's product name with spaces
+     ("WalkTalk" followed by 52 spaces), whatever it is set to, so an exact match can't pass. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
-  <pe-file product-name="WalkTalk">
+  <pe-file>
     <authenticode-sign />
   </pe-file>
 </artifact-configuration>
