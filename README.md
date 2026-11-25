@@ -27,7 +27,7 @@ WalkTalk can also learn your voice: read a set of sentences aloud and it retrain
 
 ## Install
 
-1. Download `WalkTalk-Setup-<version>.exe` from the Releases page.
+1. Download `WalkTalk-Setup-<version>.exe` from the [latest release](https://github.com/AnthonyArade/WalkTalk/releases/latest).
 2. Run it. It installs for your Windows account only and needs no administrator rights.
 
 The installer is not code-signed yet ([code signing policy](#code-signing-policy)), so Windows SmartScreen may warn "Windows protected your PC". Choose **More info**, then **Run anyway**.
