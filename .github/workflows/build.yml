@@ -6,9 +6,9 @@
 #   variable SIGNPATH_ORGANIZATION_ID
 #   variable SIGNPATH_PROJECT_SLUG               e.g. walktalk
 #   variable SIGNPATH_SIGNING_POLICY_SLUG        e.g. release-signing
-#   variable SIGNPATH_APP_CONFIGURATION          artifact configuration that signs the app's own files in the zip
-#   variable SIGNPATH_INSTALLER_CONFIGURATION    artifact configuration that signs the setup exe
-# Until then the build runs unsigned, so it can be checked on every push.
+#   variable SIGNPATH_APP_CONFIGURATION          slug of the artifact configuration made from signing/app.xml
+#   variable SIGNPATH_INSTALLER_CONFIGURATION    slug of the artifact configuration made from signing/installer.xml
+# Step-by-step setup: signing/README.md. Until then the build runs unsigned, so it can be checked on every push.
 #
 # Pushing a tag such as v1.0.1 builds, signs and attaches the installer to that GitHub release.
 
@@ -28,13 +28,19 @@ jobs:
   build:
     runs-on: windows-2025
     env:
-      SIGN: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' && github.event_name != 'pull_request' }}
+      # Only release tags are signed; ordinary pushes just check that everything builds.
+      SIGN: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' && startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
+
+      - name: Read the version
+        run: |
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
+          "VERSION=$version" >> $env:GITHUB_ENV
 
       - name: Publish the app
         run: .\build-installer.ps1 -Step Publish
@@ -43,7 +49,7 @@ jobs:
       - name: Upload the unsigned app
         if: env.SIGN == 'true'
         id: unsigned-app
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: app-unsigned
           path: publish/app
@@ -57,6 +63,8 @@ jobs:
           project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
           signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
           artifact-configuration-slug: ${{ vars.SIGNPATH_APP_CONFIGURATION }}
+          parameters: |
+            version: "${{ env.VERSION }}"
           github-artifact-id: ${{ steps.unsigned-app.outputs.artifact-id }}
           wait-for-completion: true
           wait-for-completion-timeout-in-seconds: 3600   # each release is approved by hand
@@ -69,7 +77,7 @@ jobs:
       - name: Upload the unsigned installer
         if: env.SIGN == 'true'
         id: unsigned-installer
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: installer-unsigned
           path: publish/WalkTalk-Setup-*.exe
@@ -83,13 +91,15 @@ jobs:
           project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
           signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
           artifact-configuration-slug: ${{ vars.SIGNPATH_INSTALLER_CONFIGURATION }}
+          parameters: |
+            version: "${{ env.VERSION }}"
           github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
           wait-for-completion: true
           wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: publish
 
       - name: Upload the installer
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: WalkTalk-Setup
           path: publish/WalkTalk-Setup-*.exe

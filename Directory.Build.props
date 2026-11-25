@@ -1,0 +1,13 @@
+<Project>
+  <!-- Shared by every project. The version is the one place to raise for a new release: the app, its libraries
+       and the installer all take it from here. Code signing (SignPath) checks that every signed file says
+       "WalkTalk" and this same version. -->
+  <PropertyGroup>
+    <Version>1.0.0.0</Version>
+    <Product>WalkTalk</Product>
+    <Company>WalkTalk</Company>
+    <Copyright>Copyright (c) 2026 AnthonyArade</Copyright>
+    <!-- Keep the product version plain ("1.0.0.0"), without the commit id .NET adds after a "+". -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

@@ -7,8 +7,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>WalkTalk</AssemblyName>
-    <Product>WalkTalk</Product>
-    <Version>1.0.0</Version> <!-- shown by the installer; raise it for each release so setups upgrade in place -->
     <AssemblyTitle>WalkTalk</AssemblyTitle> <!-- the name Task Manager shows -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Assets\WalkTalk.ico is generated from Assets\WalkTalk.svg (16-256 px, rendered by Chrome). -->
