@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SignPath artifact configuration "installer": the setup exe, which the build uploads as a zip holding
-     only WalkTalk-Setup-<version>.exe.
+<!-- SignPath artifact configuration "installer": the setup exe itself (WalkTalk-Setup-<version>.exe), as the
+     build sends it and as it is uploaded by hand.
      Inno Setup pads the setup exe's product name with spaces ("WalkTalk      "). If SignPath rejects the
      file over it, its error says so: then remove product-name below. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
-  <zip-file>
-    <pe-file path="**/WalkTalk-Setup-*.exe" product-name="WalkTalk">
-      <authenticode-sign />
-    </pe-file>
-  </zip-file>
+  <pe-file product-name="WalkTalk">
+    <authenticode-sign />
+  </pe-file>
 </artifact-configuration>

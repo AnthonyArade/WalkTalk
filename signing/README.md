@@ -69,7 +69,7 @@ the tag: add `refs/tags/v*` (or `v*`) there.
 | Sent to SignPath | Signed inside it |
 |---|---|
 | the app folder, as a zip | `WalkTalk.exe`, `WalkTalk.dll`, `WhisperStt.Core.dll` |
-| the setup exe, as a zip | `WalkTalk-Setup-<version>.exe` |
+| the setup exe itself | `WalkTalk-Setup-<version>.exe` |
 
 SignPath checks that each signed file says product "WalkTalk".
 The other files (.NET, Whisper, the Microsoft runtime) are not WalkTalk's own and are left as they are.

@@ -79,6 +79,7 @@ jobs:
         with:
           name: installer-unsigned
           path: publish/WalkTalk-Setup-*.exe
+          archive: false   # SignPath receives the setup exe itself, as when it is uploaded by hand
 
       - name: Sign the installer
         if: env.SIGN == 'true'
@@ -93,6 +94,7 @@ jobs:
           wait-for-completion: true
           wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: publish
+          skip-decompress: true   # the signed setup exe comes back as it is, not in a zip
 
       - name: Upload the installer
         uses: actions/upload-artifact@v7
