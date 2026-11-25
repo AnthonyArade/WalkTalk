@@ -30,7 +30,7 @@ WalkTalk can also learn your voice: read a set of sentences aloud and it retrain
 1. Download `WalkTalk-Setup-<version>.exe` from the Releases page.
 2. Run it. It installs for your Windows account only and needs no administrator rights.
 
-The installer is not code-signed yet, so Windows SmartScreen may warn "Windows protected your PC". Choose **More info**, then **Run anyway**.
+The installer is not code-signed yet ([code signing policy](#code-signing-policy)), so Windows SmartScreen may warn "Windows protected your PC". Choose **More info**, then **Run anyway**.
 
 Everything the app needs is in the installer. These larger parts download the first time they are needed:
 
@@ -117,13 +117,28 @@ The test tools never touch your real settings or recordings: they work on folder
 
 ## Privacy
 
-- Speech recognition, text-to-speech and voice training run entirely on your PC.
-- Nothing you say is sent anywhere, except the text you choose to send to Twitch chat or VRChat.
-- The only internet connections are the model and tool downloads, and Twitch when you connect it.
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
+- Speech recognition, text-to-speech and voice training run entirely on your PC. No audio ever leaves it.
+- The text of a sentence is sent only to the destinations you switch on: Twitch chat (to Twitch, once you connect your account) and VRChat (to the game on your own PC).
+- The other connections are downloads you start: the speech model (from Hugging Face, through Whisper.net), the text-to-speech voices (from GitHub) and the voice-training tools (from nuget.org and pytorch.org).
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [AnthonyArade](https://github.com/AnthonyArade)
+- Approvers: [AnthonyArade](https://github.com/AnthonyArade)
+
+Releases are built from this repository by [GitHub Actions](.github/workflows/build.yml), and every signing request is approved by hand.
+
+## License
+
+[MIT](LICENSE)
 
 ## Known limitations
 
 - Windows only.
 - Voice training needs an NVIDIA graphics card.
-- The installer and app are not code-signed, so SmartScreen or Smart App Control may warn about or block them.
+- Releases are not code-signed yet (see [Code signing policy](#code-signing-policy)), so SmartScreen or Smart App Control may warn about or block them.
 - A voice command only works when said on its own: pause briefly before and after it.

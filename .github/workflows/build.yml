@@ -1,0 +1,105 @@
+# Builds WalkTalk and its installer from the source in this repository.
+#
+# Code signing (SignPath Foundation) runs once these repository settings exist
+# (Settings > Secrets and variables > Actions):
+#   secret   SIGNPATH_API_TOKEN
+#   variable SIGNPATH_ORGANIZATION_ID
+#   variable SIGNPATH_PROJECT_SLUG               e.g. walktalk
+#   variable SIGNPATH_SIGNING_POLICY_SLUG        e.g. release-signing
+#   variable SIGNPATH_APP_CONFIGURATION          artifact configuration that signs the app's own files in the zip
+#   variable SIGNPATH_INSTALLER_CONFIGURATION    artifact configuration that signs the setup exe
+# Until then the build runs unsigned, so it can be checked on every push.
+#
+# Pushing a tag such as v1.0.1 builds, signs and attaches the installer to that GitHub release.
+
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # attach the installer to a release
+
+jobs:
+  build:
+    runs-on: windows-2025
+    env:
+      SIGN: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' && github.event_name != 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish the app
+        run: .\build-installer.ps1 -Step Publish
+
+      # ---- sign the app's own files before they are packed into the installer
+      - name: Upload the unsigned app
+        if: env.SIGN == 'true'
+        id: unsigned-app
+        uses: actions/upload-artifact@v6
+        with:
+          name: app-unsigned
+          path: publish/app
+
+      - name: Sign the app
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_APP_CONFIGURATION }}
+          github-artifact-id: ${{ steps.unsigned-app.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600   # each release is approved by hand
+          output-artifact-directory: publish/app
+
+      # ---- pack and sign the installer
+      - name: Build the installer
+        run: .\build-installer.ps1 -Step Installer
+
+      - name: Upload the unsigned installer
+        if: env.SIGN == 'true'
+        id: unsigned-installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: installer-unsigned
+          path: publish/WalkTalk-Setup-*.exe
+
+      - name: Sign the installer
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_INSTALLER_CONFIGURATION }}
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: publish
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: WalkTalk-Setup
+          path: publish/WalkTalk-Setup-*.exe
+
+      - name: Attach the installer to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release create $tag --title "WalkTalk $($tag.TrimStart('v'))" --generate-notes }
+          gh release upload $tag (Get-ChildItem publish\WalkTalk-Setup-*.exe).FullName --clobber
