@@ -5,7 +5,7 @@
      file over it, its error says so: then remove product-name below. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <zip-file>
-    <pe-file path="WalkTalk-Setup-*.exe" product-name="WalkTalk">
+    <pe-file path="**/WalkTalk-Setup-*.exe" product-name="WalkTalk">
       <authenticode-sign />
     </pe-file>
   </zip-file>
