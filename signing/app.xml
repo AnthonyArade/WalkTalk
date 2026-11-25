@@ -3,11 +3,8 @@
      as a zip with the files at its root. Signs WalkTalk's own files; the other files (.NET, Whisper, the
      Microsoft runtime) are not WalkTalk's and stay as their makers shipped them. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
-  <parameters>
-    <parameter name="version" required="true" />
-  </parameters>
   <zip-file>
-    <pe-file-set product-name="WalkTalk" product-version="${version}">
+    <pe-file-set product-name="WalkTalk">
       <include path="WalkTalk.exe" />
       <include path="WalkTalk.dll" />
       <include path="WhisperStt.Core.dll" />
