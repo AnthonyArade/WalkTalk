@@ -39,11 +39,15 @@ public static class Program
         VoiceDataset.Root = Path.Combine(sandbox, "voice");
         PersonalModel.Directory = Path.Combine(sandbox, "models");
         WhisperStt.Core.Obs.GoogleFonts.Directory = Path.Combine(sandbox, "fonts");
+        WhisperStt.Core.Obs.OverlayImages.Directory = Path.Combine(sandbox, "overlay-images");
         ObsViewModel.PreviewDataFolder = Path.Combine(sandbox, "webview");
         VrChatChatbox.Endpoint = new IPEndPoint(IPAddress.Loopback, 9123);
         TwitchApi.AuthBase = "http://127.0.0.1:9/oauth2";
         TwitchApi.ApiBase = "http://127.0.0.1:9/helix";
         File.Delete(StateStore.FilePath);
+        // The OBS check runs on its own port, so a WalkTalk already serving the overlay on 7480 is left alone.
+        if (args.Length > 3 && args[3] == "obs")
+            File.WriteAllText(StateStore.FilePath, "{ \"ObsPort\": 7491 }");
         File.Delete(PersonalModel.CandidatePath);
         Directory.CreateDirectory(args[2]);
         var learn = args.Length > 3 && args[3] == "learn";
@@ -64,77 +68,139 @@ public static class Program
                 string Shot(string name) { Capture(window, Path.Combine(args[2], name)); return name; }
                 if (args.Length > 3 && args[3] == "obs")
                 {
-                    // ---- the OBS overlay: style it, install a Google font, send sentences, read what the page gets
+                    // ---- the OBS overlay: two canvases, styled differently; fonts, picture, port; what each page gets
                     var obs = vm.Obs;
                     obs.OpenCommand.Execute(null);
-                    await Task.Delay(800);
-                    Console.WriteLine($"dialog open {obs.IsOpen}, server running {obs.IsRunning}, url {obs.Url} | {obs.Status}");
-                    obs.IsOn = true;
-                    obs.CanvasWidth = 1280;
-                    obs.CanvasHeight = 300;
-                    obs.FontSize = 64;
-                    obs.TextColor = "#FFE45C";
-                    obs.TextColor = "not a color"; // ignored
-                    obs.Case = WhisperStt.Core.Obs.TextCase.Uppercase;
-                    obs.HorizontalAlign = WhisperStt.Core.Obs.HorizontalAlign.Center;
-                    obs.VerticalAlign = WhisperStt.Core.Obs.VerticalAlign.Bottom;
-                    obs.LineHeight = 1.1;
-                    obs.ShadowX = 4; obs.ShadowY = 4; obs.ShadowBlur = 8; obs.ShadowColor = "#AA000000";
-                    obs.OutlineWidth = 4; obs.OutlineColor = "#1A1A40";
-                    obs.Lines = 2; obs.HideAfter = 0;
-                    Console.WriteLine($"text color after a bad value: {obs.TextColor}");
+                    await Task.Delay(600);
+                    Console.WriteLine($"dialog open {obs.IsOpen}, server running {obs.IsRunning}, canvases {obs.Canvases.Count} | {obs.Status}");
+                    obs.AddCommand.Execute(null);
+                    var canvas1 = obs.Editing!;
+                    canvas1.CanvasWidth = 1280; canvas1.CanvasHeight = 300;
+                    canvas1.FontSize = 64; canvas1.TextColor = "#FFE45C"; canvas1.TextColor = "not a color";
+                    canvas1.Case = WhisperStt.Core.Obs.TextCase.Uppercase;
+                    canvas1.FontWeight = 900;
+                    canvas1.ShadowX = 4; canvas1.ShadowY = 4; canvas1.ShadowBlur = 8; canvas1.ShadowColor = "#AA000000";
+                    canvas1.Outline = true; canvas1.OutlineWidth = 4; canvas1.OutlineColor = "#1A1A40";
+                    canvas1.Lines = 2; canvas1.HideAfter = 0;
+                    canvas1.AutoWidth = true; canvas1.AutoHeight = true; canvas1.PaddingX = 28; canvas1.PaddingY = 10;
+                    canvas1.Background = WhisperStt.Core.Obs.BackgroundType.Gradient;
+                    canvas1.BackgroundColor = "#CC9146FF"; canvas1.BackgroundColor2 = "#CC00F5D4"; canvas1.GradientAngle = 90;
+                    canvas1.Border = true; canvas1.BorderWidth = 3; canvas1.BorderColor = "#FFFFFF"; canvas1.BorderRadius = 24;
+                    Console.WriteLine($"canvas 1 \"{canvas1.Name}\" {canvas1.Url} | color after a bad value {canvas1.TextColor}");
 
                     obs.FontQuery = "bang";
                     for (int i = 0; i < 60 && obs.FontResults.Count == 0 && !obs.SearchStatus.StartsWith("Couldn't") && !obs.SearchStatus.StartsWith("No "); i++)
                         await Task.Delay(500);
-                    Console.WriteLine($"search 'bang': {string.Join(", ", obs.FontResults.Take(5).Select(r => $"{r.Family} ({r.Category})"))} | {obs.SearchStatus}");
                     var bangers = obs.FontResults.FirstOrDefault(r => r.Family == "Bangers");
                     if (bangers is not null)
                     {
                         obs.FontActionCommand.Execute(bangers);
                         for (int i = 0; i < 120 && !bangers.IsInstalled && !obs.SearchStatus.StartsWith("Couldn't"); i++)
                             await Task.Delay(500);
-                        Console.WriteLine($"install: installed {bangers.IsInstalled}, font now \"{obs.FontFamily}\", in the font list first: {obs.Families.FirstOrDefault()} | {obs.SearchStatus}");
-                        Console.WriteLine($"files: {string.Join(", ", Directory.GetFiles(WhisperStt.Core.Obs.GoogleFonts.Directory, "*", SearchOption.AllDirectories).Select(Path.GetFileName))}");
                     }
-                    await Task.Delay(300);
-                    Shot("o1-dialog.png");
+                    obs.FontQuery = "Inter";
+                    for (int i = 0; i < 20 && !obs.FontResults.Any(r => r.Family == "Inter"); i++)
+                        await Task.Delay(300);
+                    var inter = obs.FontResults.FirstOrDefault(r => r.Family == "Inter");
+                    Console.WriteLine($"fonts: Bangers installed {bangers?.IsInstalled}, canvas 1 font \"{canvas1.FontFamily}\"");
                     var preview = (Microsoft.Web.WebView2.Wpf.WebView2)window.FindName("ObsPreview");
                     for (int i = 0; i < 40 && preview.CoreWebView2 is null; i++)
                         await Task.Delay(250);
-                    var message = (System.Windows.Controls.TextBlock)window.FindName("ObsPreviewMessage");
-                    Console.WriteLine($"preview: browser ready {preview.CoreWebView2 is not null}, showing {preview.Source} | message: {(message.Visibility == Visibility.Visible ? message.Text : "none")}");
+                    Console.WriteLine($"preview: browser ready {preview.CoreWebView2 is not null}, showing {preview.Source}");
+                    Shot("o1-editor.png");
 
-                    // what OBS would receive
-                    using var http = new System.Net.Http.HttpClient();
-                    var page = await http.GetStringAsync(obs.Url);
-                    var css = await http.GetStringAsync(obs.Url + "fonts.css");
-                    Console.WriteLine($"page: {page.Length} chars, has EventSource {page.Contains("EventSource")} | fonts.css: {css.Length} chars, points to local files {css.Contains("url(/fonts/bangers/")}");
-                    using var stream = await http.GetStreamAsync(obs.Url + "events");
-                    using var reader = new StreamReader(stream);
-                    var events = new List<string>();
-                    var reading = Task.Run(async () =>
+                    // second canvas: a plain one with a picture background, from the + tile
+                    obs.BackCommand.Execute(null);
+                    obs.AddCommand.Execute(null);
+                    var canvas2 = obs.Editing!;
+                    canvas2.Name = "Chat box";
+                    canvas2.CanvasWidth = 600; canvas2.CanvasHeight = 600;
+                    canvas2.HorizontalAlign = WhisperStt.Core.Obs.HorizontalAlign.Left;
+                    canvas2.VerticalAlign = WhisperStt.Core.Obs.VerticalAlign.Top;
+                    canvas2.Lines = 4;
+                    if (inter is not null)
                     {
-                        string? line;
-                        while ((line = await reader.ReadLineAsync()) is not null)
-                            if (line.StartsWith("data:") || line.StartsWith("event:"))
-                                lock (events) events.Add(line);
-                    });
+                        obs.FontActionCommand.Execute(inter);
+                        for (int i = 0; i < 120 && !inter.IsInstalled && !obs.SearchStatus.StartsWith("Couldn't"); i++)
+                            await Task.Delay(500);
+                    }
+                    canvas2.FontWeight = 300;
+                    var picture = Path.Combine(sandbox, "picture.png");
+                    var bitmap = new RenderTargetBitmap(64, 64, 96, 96, PixelFormats.Pbgra32);
+                    var drawing = new DrawingVisual();
+                    using (var dc = drawing.RenderOpen())
+                        dc.DrawRectangle(new LinearGradientBrush(Colors.DarkSlateBlue, Colors.DarkOrange, 45), null, new Rect(0, 0, 64, 64));
+                    bitmap.Render(drawing);
+                    var png = new PngBitmapEncoder();
+                    png.Frames.Add(BitmapFrame.Create(bitmap));
+                    using (var file = File.Create(picture))
+                        png.Save(file);
+                    canvas2.Background = WhisperStt.Core.Obs.BackgroundType.Image;
+                    canvas2.SetImage(WhisperStt.Core.Obs.OverlayImages.Import(canvas2.Id, picture));
+                    Console.WriteLine($"canvas 2 \"{canvas2.Name}\" font \"{canvas2.FontFamily}\" weight {canvas2.FontWeight}, picture \"{canvas2.Style.BackgroundImage}\" ({canvas2.ImageText})");
+                    await Task.Delay(800);
+                    Shot("o2-editor-picture.png");
+                    obs.BackCommand.Execute(null);
                     await Task.Delay(400);
+                    Shot("o3-canvases.png");
+
+                    // what each OBS page receives
+                    using var http = new System.Net.Http.HttpClient();
+                    async Task<List<string>> Listen(string id, Func<Task> act)
+                    {
+                        using var stream = await http.GetStreamAsync($"http://127.0.0.1:{obs.PortText}/events?c={id}");
+                        using var reader = new StreamReader(stream);
+                        var got = new List<string>();
+                        var reading = Task.Run(async () =>
+                        {
+                            string? line;
+                            while ((line = await reader.ReadLineAsync()) is not null)
+                                if (line.StartsWith("event:") || line.StartsWith("data:"))
+                                    lock (got) got.Add(line);
+                        });
+                        await Task.Delay(300);
+                        await act();
+                        await Task.Delay(500);
+                        lock (got) return [.. got];
+                    }
                     var onTranscribed = typeof(MainViewModel).GetMethod("OnTranscribed", BindingFlags.Instance | BindingFlags.NonPublic)!;
-                    onTranscribed.Invoke(vm, [new TranscriptSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "Hello chat, welcome to the stream!", 0.9f)]);
-                    onTranscribed.Invoke(vm, [new TranscriptSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "Today we try the new overlay.", 0.9f)]);
-                    await Task.Delay(600);
-                    lock (events)
-                        foreach (var e in events)
-                            Console.WriteLine($"   {(e.Length > 160 ? e[..160] + "…" : e)}");
-                    Console.WriteLine($"status: {obs.Status}");
-                    Console.WriteLine("KEEP-OPEN: the overlay stays up for 45 s at " + obs.Url);
+                    void SayIt(string text) => onTranscribed.Invoke(vm, [new TranscriptSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), text, 0.9f)]);
+                    var page = await http.GetStringAsync(canvas1.Url);
+                    Console.WriteLine($"page for canvas 1: {page.Length} chars | picture served: {(await http.GetAsync($"http://127.0.0.1:{obs.PortText}/bg/{canvas2.Id}")).StatusCode}");
+                    canvas2.IsOn = false;
+                    var toFirst = await Listen(canvas1.Id, () => { SayIt("Hello chat, welcome to the stream!"); return Task.CompletedTask; });
+                    var toSecond = await Listen(canvas2.Id, () => { SayIt("Canvas two is off, so nothing here."); return Task.CompletedTask; });
+                    Console.WriteLine("canvas 1 got:");
+                    foreach (var e in toFirst) Console.WriteLine($"   {(e.Length > 150 ? e[..150] + "…" : e)}");
+                    Console.WriteLine($"canvas 2 (off) got lines: {toSecond.Count(e => e == "event: line")}");
+                    canvas2.IsOn = true;
+                    SayIt("Today we try two canvases.");
+                    SayIt("The second one shows four sentences.");
+
+                    // port change
+                    obs.PortText = "7495";
+                    obs.ApplyPortCommand.Execute(null);
+                    await Task.Delay(300);
+                    Console.WriteLine($"after the port change: {canvas1.Url} | running {obs.IsRunning} | {obs.Status}");
+                    var moved = await http.GetAsync(canvas1.Url);
+                    Console.WriteLine($"page on the new port: {moved.StatusCode}");
+                    SayIt("Hello chat, welcome to the stream!");
+                    SayIt("Today we try two canvases.");
+
+                    // deleting asks twice
+                    obs.AddCommand.Execute(null);
+                    obs.DeleteCommand.Execute(null);
+                    var asked = obs.DeleteText;
+                    obs.DeleteCommand.Execute(null);
+                    Console.WriteLine($"delete: canvas1 press \"{asked}\", canvases now {obs.Canvases.Count}, editing {obs.IsEditing}");
+                    var savedState = StateStore.Load();
+                    Console.WriteLine($"saved: {savedState.ObsCanvases.Count} canvases on port {savedState.ObsPort}: {string.Join(", ", savedState.ObsCanvases.Select(c => $"{c.Name} {c.Width}x{c.Height} on={c.IsOn}"))}");
+                    Console.WriteLine($"KEEP-OPEN: 45 s at {canvas1.Url} and {canvas2.Url}");
                     await Task.Delay(45_000);
                     obs.IsOpen = false;
-                    obs.IsOn = false;
+                    foreach (var c in obs.Canvases) c.IsOn = false;
                     await Task.Delay(300);
-                    Console.WriteLine($"after switching off and closing: server running {obs.IsRunning}");
+                    Console.WriteLine($"after switching everything off and closing: server running {obs.IsRunning}");
                     window.Closed += (_, _) => app.Shutdown();
                     window.Close();
                     return;

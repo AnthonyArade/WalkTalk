@@ -5,45 +5,105 @@ namespace WhisperStt.Core.Obs;
 public enum TextCase { AsSaid, Uppercase, Lowercase, Capitalize }
 public enum HorizontalAlign { Left, Center, Right }
 public enum VerticalAlign { Top, Middle, Bottom }
+public enum BackgroundType { None, Color, Gradient, Image }
+public enum ImageFit { Cover, Contain, Stretch, Tile }
 
-// How the transcript looks in OBS. Colors are "#RRGGBB" or "#AARRGGBB" (alpha first, as in WPF).
+// One OBS canvas: a Browser Source page with its own size and look. Colors are "#RRGGBB" or "#AARRGGBB"
+// (alpha first, as in WPF).
+//
+// Layout: the canvas is the Browser Source's area. Inside it sits the box (background, border, padding),
+// which holds the text. The box fills the canvas, or with auto width / auto height shrinks to the text and
+// is placed by the text alignment.
 public sealed class OverlayStyle
 {
+    public string Id { get; set; } = NewId();
+    public string Name { get; set; } = "Canvas";
+    public bool IsOn { get; set; } = true;
+
+    // -- canvas
     public int Width { get; set; } = 1280;
     public int Height { get; set; } = 220;
+    // How many of the latest sentences stay on screen, and for how long (0 = until the next one).
+    public int Lines { get; set; } = 2;
+    public double HideAfterSeconds { get; set; } = 8;
 
+    // -- box
+    public bool AutoWidth { get; set; }
+    public bool AutoHeight { get; set; }
+    public double PaddingX { get; set; } = 16;
+    public double PaddingY { get; set; } = 8;
+
+    // -- text
     public string FontFamily { get; set; } = "Segoe UI";
+    public int FontWeight { get; set; } = 700;
+    // Older settings had only bold or not; read once, then FontWeight is used.
+    public bool? Bold { get; set; }
     public double FontSize { get; set; } = 48;
-    public bool Bold { get; set; } = true;
     public string Color { get; set; } = "#FFFFFF";
     public TextCase Case { get; set; } = TextCase.AsSaid;
     public HorizontalAlign HorizontalAlign { get; set; } = HorizontalAlign.Center;
     public VerticalAlign VerticalAlign { get; set; } = VerticalAlign.Bottom;
     public double LineHeight { get; set; } = 1.2;
 
+    // -- shadow
     public bool Shadow { get; set; } = true;
     public double ShadowX { get; set; } = 2;
     public double ShadowY { get; set; } = 2;
     public double ShadowBlur { get; set; } = 6;
     public string ShadowColor { get; set; } = "#CC000000";
 
+    // -- outline
+    public bool Outline { get; set; } = true;
     public double OutlineWidth { get; set; } = 3;
     public string OutlineColor { get; set; } = "#000000";
 
-    // How many of the latest sentences stay on screen, and for how long (0 = until the next one).
-    public int Lines { get; set; } = 2;
-    public double HideAfterSeconds { get; set; } = 8;
+    // -- background
+    public BackgroundType Background { get; set; } = BackgroundType.None;
+    public string BackgroundColor { get; set; } = "#99000000";
+    public string BackgroundColor2 { get; set; } = "#00000000";
+    public double GradientAngle { get; set; } = 180;
+    // A copy of the chosen picture, kept with WalkTalk's data (see OverlayImages).
+    public string BackgroundImage { get; set; } = "";
+    public ImageFit ImageFit { get; set; } = ImageFit.Cover;
+
+    // -- border
+    public bool Border { get; set; }
+    public double BorderWidth { get; set; } = 2;
+    public string BorderColor { get; set; } = "#FFFFFF";
+    public double BorderRadius { get; set; } = 12;
+
+    public static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
     public OverlayStyle Clone() => (OverlayStyle)MemberwiseClone();
 
-    // What the overlay page receives: ready-to-use CSS values.
-    public object ToPage() => new
+    // Fixes values from older settings files.
+    public void Upgrade()
+    {
+        if (Bold is { } bold)
+        {
+            FontWeight = bold ? 700 : 400;
+            Bold = null;
+        }
+        if (string.IsNullOrWhiteSpace(Id))
+            Id = NewId();
+    }
+
+    // What the overlay page receives: ready-to-use CSS values. imageVersion changes when the picture does,
+    // so OBS doesn't keep showing an old one.
+    public object ToPage(long imageVersion = 0) => new
     {
         width = Math.Clamp(Width, 50, 7680),
         height = Math.Clamp(Height, 20, 4320),
+        lines = Math.Clamp(Lines, 1, 10),
+        hideAfter = Math.Max(0, HideAfterSeconds),
+
+        autoWidth = AutoWidth,
+        autoHeight = AutoHeight,
+        padding = $"{N(Math.Clamp(PaddingY, 0, 400))}px {N(Math.Clamp(PaddingX, 0, 400))}px",
+
         fontFamily = CssFamily(FontFamily),
+        fontWeight = Math.Clamp(FontWeight / 100 * 100, 100, 900),
         fontSize = Math.Clamp(FontSize, 4, 400),
-        fontWeight = Bold ? 700 : 400,
         color = Css(Color, "#FFFFFF"),
         textTransform = Case switch
         {
@@ -56,10 +116,24 @@ public sealed class OverlayStyle
         verticalAlign = VerticalAlign.ToString().ToLowerInvariant(),
         lineHeight = Math.Clamp(LineHeight, 0.5, 4),
         textShadow = Shadow ? $"{N(ShadowX)}px {N(ShadowY)}px {N(Math.Max(0, ShadowBlur))}px {Css(ShadowColor, "#000000")}" : "none",
-        outlineWidth = Math.Clamp(OutlineWidth, 0, 40),
+        outlineWidth = Outline ? Math.Clamp(OutlineWidth, 0, 40) : 0,
         outlineColor = Css(OutlineColor, "#000000"),
-        lines = Math.Clamp(Lines, 1, 10),
-        hideAfter = Math.Max(0, HideAfterSeconds),
+
+        background = Background switch
+        {
+            BackgroundType.Color => Css(BackgroundColor, "#000000"),
+            BackgroundType.Gradient => $"linear-gradient({N(GradientAngle)}deg, {Css(BackgroundColor, "#000000")}, {Css(BackgroundColor2, "#000000")})",
+            BackgroundType.Image when BackgroundImage.Length > 0 => $"url(/bg/{Id}?v={imageVersion}) center / {ImageFit switch
+            {
+                ImageFit.Contain => "contain no-repeat",
+                ImageFit.Stretch => "100% 100% no-repeat",
+                ImageFit.Tile => "auto repeat",
+                _ => "cover no-repeat"
+            }}",
+            _ => "transparent"
+        },
+        border = Border && BorderWidth > 0 ? $"{N(Math.Clamp(BorderWidth, 0, 100))}px solid {Css(BorderColor, "#FFFFFF")}" : "none",
+        borderRadius = Math.Clamp(BorderRadius, 0, 1000),
     };
 
     // "#AARRGGBB" (WPF order) to CSS rgba(); anything that isn't a color gives the fallback.
@@ -83,6 +157,8 @@ public sealed class OverlayStyle
         b = (byte)value;
         return true;
     }
+
+    public static string Hex(byte a, byte r, byte g, byte b) => a == 255 ? $"#{r:X2}{g:X2}{b:X2}" : $"#{a:X2}{r:X2}{g:X2}{b:X2}";
 
     // Quoted for CSS, with a generic family behind it in case the font is missing.
     private static string CssFamily(string family)

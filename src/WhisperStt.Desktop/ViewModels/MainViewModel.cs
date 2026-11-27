@@ -65,7 +65,7 @@ public sealed class MainViewModel : ObservableObject
             Post: Post));
         VrChat = new VrChatViewModel(state.VrChat, SaveState);
         Twitch = new TwitchViewModel(state, SaveState, Post);
-        Obs = new ObsViewModel(state, SaveState, Post);
+        Obs = new ObsViewModel(state, SaveState);
         Replacements = new ReplacementsViewModel(state.Replacements, () => SelectedModel, SaveState);
         ReadAloud = new ReadAloudViewModel(state, SaveState, Post);
         ReadAloud.ReadingChanged += OnReadingAloudChanged;

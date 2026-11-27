@@ -4,20 +4,21 @@ using System.Text.Json;
 
 namespace WhisperStt.Core.Obs;
 
-// A small web server on this PC that OBS shows as a Browser Source: the page draws the latest sentences
-// with the user's style and gets each new sentence the moment it is said (server-sent events).
-// It listens on 127.0.0.1 only, so nothing outside this PC can reach it.
+// A small web server on this PC that OBS shows as Browser Sources, one page per canvas
+// (http://127.0.0.1:<port>/c/<canvas id>). Each page draws the latest sentences with its canvas's style and
+// gets each new sentence the moment it is said (server-sent events). It listens on 127.0.0.1 only, so
+// nothing outside this PC can reach it.
 public sealed class OverlayServer : IDisposable
 {
     public const int DefaultPort = 7480;
 
     private readonly HttpListener _listener = new();
-    private readonly List<HttpListenerResponse> _clients = [];
+    private readonly List<(HttpListenerResponse Response, string Canvas)> _clients = [];
+    private readonly Dictionary<string, OverlayStyle> _canvases = [];
+    private readonly Dictionary<string, long> _imageVersions = [];
+    private readonly List<(string Text, DateTime Said)> _recent = [];
     private readonly Lock _gate = new();
     private readonly Timer _heartbeat;
-    private readonly List<(string Text, DateTime Said)> _recent = [];
-    private OverlayStyle _current = new();
-    private string _style = "{}";
     private bool _disposed;
 
     public OverlayServer(int port = DefaultPort)
@@ -27,20 +28,35 @@ public sealed class OverlayServer : IDisposable
         _listener.Start(); // throws HttpListenerException when the port is taken
         _ = Task.Run(AcceptAsync);
         // A comment line now and then: lets a dead connection (OBS closed) be noticed and dropped.
-        _heartbeat = new Timer(_ => Broadcast(": keep-alive\n\n"), null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+        _heartbeat = new Timer(_ => Broadcast(null, ": keep-alive\n\n"), null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
     }
 
     public int Port { get; }
-    public string Url => $"http://127.0.0.1:{Port}/";
 
-    public void SetStyle(OverlayStyle style)
+    public string UrlOf(string canvasId) => $"http://127.0.0.1:{Port}/c/{canvasId}";
+
+    // Adds or updates a canvas; its open pages restyle at once.
+    public void SetCanvas(OverlayStyle canvas, bool imageChanged = false)
     {
-        _current = style.Clone();
-        _style = JsonSerializer.Serialize(style.ToPage());
-        Broadcast($"event: style\ndata: {_style}\n\n");
+        string style;
+        lock (_gate)
+        {
+            _canvases[canvas.Id] = canvas.Clone();
+            if (imageChanged || !_imageVersions.ContainsKey(canvas.Id))
+                _imageVersions[canvas.Id] = DateTime.UtcNow.Ticks;
+            style = StyleEvent(canvas.Id);
+        }
+        Broadcast(canvas.Id, style);
     }
 
-    // A new sentence for the screen.
+    public void RemoveCanvas(string canvasId)
+    {
+        lock (_gate)
+            _canvases.Remove(canvasId);
+        Broadcast(canvasId, "event: clear\ndata: {}\n\n");
+    }
+
+    // A new sentence for every canvas that is on.
     public void Show(string text)
     {
         lock (_gate)
@@ -49,32 +65,42 @@ public sealed class OverlayServer : IDisposable
             if (_recent.Count > 10)
                 _recent.RemoveAt(0);
         }
-        Broadcast(LineEvent(text));
+        var line = LineEvent(text);
+        foreach (var id in CanvasesOn())
+            Broadcast(id, line);
     }
 
-    // Empties the screen ("Clean" voice command).
+    // Empties every canvas ("Clean" voice command).
     public void Clear()
     {
         lock (_gate)
             _recent.Clear();
-        Broadcast("event: clear\ndata: {}\n\n");
+        Broadcast(null, "event: clear\ndata: {}\n\n");
     }
+
+    // Tells open pages to load the fonts again (one was just installed).
+    public void FontsChanged() => Broadcast(null, "event: fonts\ndata: {}\n\n");
+
+    private List<string> CanvasesOn()
+    {
+        lock (_gate)
+            return _canvases.Values.Where(c => c.IsOn).Select(c => c.Id).ToList();
+    }
+
+    private string StyleEvent(string canvasId) =>
+        $"event: style\ndata: {JsonSerializer.Serialize(_canvases[canvasId].ToPage(_imageVersions.GetValueOrDefault(canvasId)))}\n\n";
 
     private static string LineEvent(string text) => $"event: line\ndata: {JsonSerializer.Serialize(new { text })}\n\n";
 
     // What is on screen right now, for a page that connects late (OBS reloads a source when its scene shows).
-    private List<string> StillShown()
+    private List<string> StillShown(OverlayStyle canvas)
     {
-        var keep = Math.Clamp(_current.Lines, 1, 10);
-        var since = _current.HideAfterSeconds > 0 ? DateTime.UtcNow.AddSeconds(-_current.HideAfterSeconds) : DateTime.MinValue;
-        lock (_gate)
-            return _recent.Count > 0 && _recent[^1].Said >= since
-                ? _recent.TakeLast(keep).Select(r => r.Text).ToList()
-                : [];
+        if (!canvas.IsOn)
+            return [];
+        var keep = Math.Clamp(canvas.Lines, 1, 10);
+        var since = canvas.HideAfterSeconds > 0 ? DateTime.UtcNow.AddSeconds(-canvas.HideAfterSeconds) : DateTime.MinValue;
+        return _recent.Count > 0 && _recent[^1].Said >= since ? _recent.TakeLast(keep).Select(r => r.Text).ToList() : [];
     }
-
-    // Tells open pages to load the fonts again (one was just installed).
-    public void FontsChanged() => Broadcast("event: fonts\ndata: {}\n\n");
 
     private async Task AcceptAsync()
     {
@@ -85,11 +111,7 @@ public sealed class OverlayServer : IDisposable
             {
                 context = await _listener.GetContextAsync().ConfigureAwait(false);
             }
-            catch (Exception) when (_disposed)
-            {
-                return;
-            }
-            catch (HttpListenerException)
+            catch (Exception ex) when (_disposed || ex is HttpListenerException or ObjectDisposedException)
             {
                 return;
             }
@@ -105,23 +127,37 @@ public sealed class OverlayServer : IDisposable
             var path = context.Request.Url?.AbsolutePath ?? "/";
             if (path == "/events")
             {
+                var id = context.Request.QueryString["c"] ?? "";
+                string style;
+                List<string> lines;
+                lock (_gate)
+                {
+                    if (!_canvases.TryGetValue(id, out var canvas))
+                    {
+                        response.StatusCode = 404;
+                        response.Close();
+                        return;
+                    }
+                    style = StyleEvent(id);
+                    lines = StillShown(canvas);
+                }
                 response.ContentType = "text/event-stream";
                 response.Headers["Cache-Control"] = "no-cache";
                 response.SendChunked = true;
-                Write(response, $"event: style\ndata: {_style}\n\n");
-                foreach (var text in StillShown())
-                    Write(response, LineEvent(text));
+                Write(response, style + string.Concat(lines.Select(LineEvent)));
                 lock (_gate)
-                    _clients.Add(response);
+                    _clients.Add((response, id));
                 return; // stays open; new sentences are written to it as they come
             }
 
-            if (path is "/" or "/index.html")
+            if (path.StartsWith("/c/", StringComparison.Ordinal))
                 Send(response, "text/html; charset=utf-8", Page.Value);
             else if (path == "/fonts.css")
                 Send(response, "text/css; charset=utf-8", Encoding.UTF8.GetBytes(GoogleFonts.Stylesheet()));
-            else if (path.StartsWith("/fonts/", StringComparison.Ordinal) && GoogleFonts.FilePath(path["/fonts/".Length..]) is { } file)
-                Send(response, "font/woff2", File.ReadAllBytes(file));
+            else if (path.StartsWith("/fonts/", StringComparison.Ordinal) && GoogleFonts.FilePath(path["/fonts/".Length..]) is { } font)
+                Send(response, "font/woff2", File.ReadAllBytes(font));
+            else if (path.StartsWith("/bg/", StringComparison.Ordinal) && ImageOf(path["/bg/".Length..]) is { } image)
+                Send(response, OverlayImages.ContentType(image), File.ReadAllBytes(image));
             else
             {
                 response.StatusCode = 404;
@@ -132,6 +168,12 @@ public sealed class OverlayServer : IDisposable
         {
             try { response.Abort(); } catch (ObjectDisposedException) { }
         }
+    }
+
+    private string? ImageOf(string canvasId)
+    {
+        lock (_gate)
+            return _canvases.TryGetValue(canvasId, out var canvas) ? OverlayImages.PathOf(canvas.BackgroundImage) : null;
     }
 
     private static void Send(HttpListenerResponse response, string type, byte[] body)
@@ -150,22 +192,23 @@ public sealed class OverlayServer : IDisposable
         response.OutputStream.Flush();
     }
 
-    private void Broadcast(string text)
+    // Sends to the pages of one canvas, or of every canvas when canvasId is null.
+    private void Broadcast(string? canvasId, string text)
     {
-        List<HttpListenerResponse> clients;
+        List<(HttpListenerResponse Response, string Canvas)> clients;
         lock (_gate)
-            clients = [.. _clients];
+            clients = _clients.Where(c => canvasId is null || c.Canvas == canvasId).ToList();
         foreach (var client in clients)
         {
             try
             {
-                Write(client, text);
+                Write(client.Response, text);
             }
             catch (Exception ex) when (ex is HttpListenerException or IOException or ObjectDisposedException or InvalidOperationException)
             {
                 lock (_gate)
                     _clients.Remove(client);
-                try { client.Abort(); } catch (ObjectDisposedException) { }
+                try { client.Response.Abort(); } catch (ObjectDisposedException) { }
             }
         }
     }
@@ -187,7 +230,7 @@ public sealed class OverlayServer : IDisposable
         lock (_gate)
         {
             foreach (var client in _clients)
-                try { client.Abort(); } catch (ObjectDisposedException) { }
+                try { client.Response.Abort(); } catch (ObjectDisposedException) { }
             _clients.Clear();
         }
         _listener.Close();

@@ -4,7 +4,8 @@ using System.Text.RegularExpressions;
 
 namespace WhisperStt.Core.Obs;
 
-public sealed record GoogleFont(string Family, string Category, int Popularity);
+// Styles: the weights it comes in, with an "i" for italics ("400", "700", "400i"), as Google lists them.
+public sealed record GoogleFont(string Family, string Category, int Popularity, IReadOnlyList<string> Styles);
 
 // Google Fonts for the OBS overlay: the list to search in, and installing a family for good. An installed
 // family is kept in %LOCALAPPDATA%\WhisperStt\fonts and served to OBS by the overlay server, so the
@@ -47,7 +48,10 @@ public static partial class GoogleFonts
                 continue;
             var category = family.TryGetProperty("category", out var c) ? c.GetString() ?? "" : "";
             var popularity = family.TryGetProperty("popularity", out var p) && p.TryGetInt32(out var rank) ? rank : int.MaxValue;
-            fonts.Add(new GoogleFont(name, category, popularity));
+            var styles = family.TryGetProperty("fonts", out var f) && f.ValueKind == JsonValueKind.Object
+                ? f.EnumerateObject().Select(s => s.Name).ToList()
+                : [];
+            fonts.Add(new GoogleFont(name, category, popularity, styles));
         }
         _list = fonts.OrderBy(f => f.Popularity).ToList();
         return _list;
@@ -76,7 +80,7 @@ public static partial class GoogleFonts
 
     public static bool IsInstalled(string family) => File.Exists(Path.Combine(Directory, Slug(family), "family.txt"));
 
-    // Downloads a family (regular and bold, with italics where they exist) and keeps it for the overlay.
+    // Downloads a family (every weight it has, with italics) and keeps it for the overlay.
     public static async Task InstallAsync(string family, CancellationToken ct = default)
     {
         var css = await FetchCssAsync(family, ct).ConfigureAwait(false);
@@ -141,8 +145,22 @@ public static partial class GoogleFonts
     private static async Task<string> FetchCssAsync(string family, CancellationToken ct)
     {
         var name = Uri.EscapeDataString(family.Trim()).Replace("%20", "+");
-        // Not every family has every style: ask for the most, then for less until Google agrees.
-        string[] variants = [":ital,wght@0,400;0,700;1,400;1,700", ":wght@400;700", ""];
+        // Every style the family has, when the list says which (so every font weight can be used);
+        // otherwise ask for the most likely ones, then for less until Google agrees.
+        List<string> variants = [];
+        if (_list?.FirstOrDefault(f => f.Family.Equals(family.Trim(), StringComparison.OrdinalIgnoreCase)) is { Styles.Count: > 0 } known)
+        {
+            var tuples = known.Styles
+                .Select(s => (Italic: s.EndsWith('i') ? 1 : 0, Weight: int.TryParse(s.TrimEnd('i'), out var w) ? w : 0))
+                .Where(s => s.Weight is >= 100 and <= 900)
+                .Distinct()
+                .OrderBy(s => s.Italic).ThenBy(s => s.Weight)
+                .Select(s => $"{s.Italic},{s.Weight}")
+                .ToList();
+            if (tuples.Count > 0)
+                variants.Add(":ital,wght@" + string.Join(';', tuples));
+        }
+        variants.AddRange([":ital,wght@0,400;0,700;1,400;1,700", ":wght@400;700", ""]);
         foreach (var variant in variants)
         {
             using var response = await Http.GetAsync($"{CssUrl}?family={name}{variant}&display=swap", ct).ConfigureAwait(false);

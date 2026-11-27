@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Net;
 using System.Net.Http;
-using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Windows.Media;
 using WhisperStt.Core.Obs;
@@ -10,9 +9,6 @@ using WhisperStt.Desktop.Mvvm;
 using WhisperStt.Desktop.Services;
 
 namespace WhisperStt.Desktop.ViewModels;
-
-// One choice in a list, with the words shown for it.
-public sealed record Choice<T>(T Value, string Label);
 
 // A Google Fonts family found by the search.
 public sealed class FontResult(GoogleFont font, bool installed) : ObservableObject
@@ -45,52 +41,89 @@ public sealed class FontResult(GoogleFont font, bool installed) : ObservableObje
     public string ActionText => IsBusy ? "Installing…" : IsInstalled ? "Use" : "Install";
 }
 
-// The OBS overlay: while the canvas is on, every sentence also appears on a transparent page that OBS
-// shows as a Browser Source, styled as the user chooses here.
+// The OBS overlay: any number of canvases, each a page OBS shows as a Browser Source. While a canvas is on,
+// every sentence also appears on it, styled as the user chose. One local server serves them all.
 public sealed class ObsViewModel : ObservableObject, IDisposable
 {
     private const int MaxResults = 30;
 
     private readonly Action _changed;
-    private readonly Action<Action> _post;
-    private readonly OverlayStyle _style;
     private readonly IReadOnlyList<string> _systemFonts;
     private OverlayServer? _server;
-    private bool _isOpen, _isOn;
+    private int _port;
+    private string _portText;
+    private bool _isOpen, _confirmDelete;
+    private CanvasViewModel? _editing;
     private string _status = "", _fontQuery = "", _searchStatus = "";
     private CancellationTokenSource? _search;
 
-    public ObsViewModel(AppState state, Action changed, Action<Action> post)
+    public ObsViewModel(AppState state, Action changed)
     {
         _changed = changed;
-        _post = post;
-        _style = state.Obs?.Clone() ?? new OverlayStyle();
-        _isOn = state.ObsOn;
+        _port = state.ObsPort is > 1023 and < 65536 ? state.ObsPort : OverlayServer.DefaultPort;
+        _portText = _port.ToString();
         _systemFonts = Fonts.SystemFontFamilies.Select(f => f.Source).Distinct().OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+
+        // Settings from before there were several canvases become the first canvas.
+        var saved = state.ObsCanvases.Count > 0 ? state.ObsCanvases
+            : state.Obs is { } old ? [old] : [];
+        if (state.ObsCanvases.Count == 0 && state.Obs is not null)
+            saved[0].IsOn = state.ObsOn;
+        foreach (var style in saved)
+        {
+            var copy = style.Clone();
+            copy.Upgrade();
+            Canvases.Add(Wrap(copy));
+        }
         RefreshFamilies();
 
         OpenCommand = new RelayCommand(() => IsOpen = true);
-        CopyUrlCommand = new RelayCommand(() => ClipboardHelper.TrySetText(Url));
+        AddCommand = new RelayCommand(Add);
+        EditCommand = new RelayCommand<CanvasViewModel>(canvas => Editing = canvas);
+        BackCommand = new RelayCommand(() => Editing = null);
+        DeleteCommand = new RelayCommand(Delete, () => Editing is not null);
+        CopyUrlCommand = new RelayCommand(() => ClipboardHelper.TrySetText(Editing?.Url ?? ""));
+        ApplyPortCommand = new RelayCommand(ApplyPort);
+        ChooseImageCommand = new RelayCommand(ChooseImage, () => Editing is not null);
+        RemoveImageCommand = new RelayCommand(() => { if (Editing is { } c) { OverlayImages.Remove(c.Id); c.SetImage(""); } });
+        ResetCommand = new RelayCommand(Reset, () => Editing is not null);
         FontActionCommand = new RelayCommand<FontResult>(result => _ = FontActionAsync(result));
         InstallTypedCommand = new RelayCommand(() => _ = InstallTypedAsync(), () => FontQuery.Trim().Length > 0);
-        ResetCommand = new RelayCommand(Reset);
         UpdateServer();
     }
+
+    public ICommand OpenCommand { get; }
+    public ICommand AddCommand { get; }
+    public ICommand EditCommand { get; }
+    public ICommand BackCommand { get; }
+    public ICommand DeleteCommand { get; }
+    public ICommand CopyUrlCommand { get; }
+    public ICommand ApplyPortCommand { get; }
+    public ICommand ChooseImageCommand { get; }
+    public ICommand RemoveImageCommand { get; }
+    public ICommand ResetCommand { get; }
+    public ICommand FontActionCommand { get; }
+    public ICommand InstallTypedCommand { get; }
 
     // Where the preview's browser keeps its data. Settable so tests can keep it apart from the user's.
     public static string PreviewDataFolder { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WhisperStt", "webview");
 
-    public ICommand OpenCommand { get; }
-    public ICommand CopyUrlCommand { get; }
-    public ICommand FontActionCommand { get; }
-    public ICommand InstallTypedCommand { get; }
-    public ICommand ResetCommand { get; }
+    public ObservableCollection<CanvasViewModel> Canvases { get; } = [];
+    // The fonts to pick from: installed Google Fonts first, then the fonts installed on this PC.
+    public ObservableCollection<string> Families { get; } = [];
+    public ObservableCollection<FontResult> FontResults { get; } = [];
 
     public IReadOnlyList<Choice<TextCase>> Cases { get; } =
     [
         new(TextCase.AsSaid, "As said"), new(TextCase.Uppercase, "UPPERCASE"),
         new(TextCase.Lowercase, "lowercase"), new(TextCase.Capitalize, "Capitalize Each Word")
+    ];
+
+    public IReadOnlyList<Choice<int>> Weights { get; } =
+    [
+        new(100, "100 · Thin"), new(200, "200 · Extra light"), new(300, "300 · Light"), new(400, "400 · Regular"),
+        new(500, "500 · Medium"), new(600, "600 · Semibold"), new(700, "700 · Bold"), new(800, "800 · Extra bold"), new(900, "900 · Black")
     ];
 
     public IReadOnlyList<Choice<HorizontalAlign>> HorizontalAligns { get; } =
@@ -99,9 +132,11 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
     public IReadOnlyList<Choice<VerticalAlign>> VerticalAligns { get; } =
         [new(VerticalAlign.Top, "Top"), new(VerticalAlign.Middle, "Middle"), new(VerticalAlign.Bottom, "Bottom")];
 
-    // The fonts to pick from: installed Google Fonts first, then the fonts installed on this PC.
-    public ObservableCollection<string> Families { get; } = [];
-    public ObservableCollection<FontResult> FontResults { get; } = [];
+    public IReadOnlyList<Choice<BackgroundType>> BackgroundTypes { get; } =
+        [new(BackgroundType.None, "None (transparent)"), new(BackgroundType.Color, "Color"), new(BackgroundType.Gradient, "Gradient"), new(BackgroundType.Image, "Picture")];
+
+    public IReadOnlyList<Choice<ImageFit>> ImageFits { get; } =
+        [new(ImageFit.Cover, "Fill (crop)"), new(ImageFit.Contain, "Fit (whole picture)"), new(ImageFit.Stretch, "Stretch"), new(ImageFit.Tile, "Tile")];
 
     public bool IsOpen
     {
@@ -111,31 +146,31 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
             if (_isOpen == value)
                 return;
             _isOpen = value;
-            UpdateServer(); // the preview needs the page even while the canvas is off, so start it before saying so
+            if (!value)
+                Editing = null;
+            UpdateServer(); // the preview needs the pages even while every canvas is off, so start it first
             OnPropertyChanged();
         }
     }
 
-    // The canvas switch: whether sentences go to OBS.
-    public bool IsOn
+    // The canvas being edited, or null on the list of canvases.
+    public CanvasViewModel? Editing
     {
-        get => _isOn;
+        get => _editing;
         set
         {
-            if (!SetProperty(ref _isOn, value))
+            if (!SetProperty(ref _editing, value))
                 return;
-            OnPropertyChanged(nameof(ToggleText));
-            OnPropertyChanged(nameof(Summary));
-            UpdateServer();
-            _changed();
+            ConfirmDelete = false;
+            OnPropertyChanged(nameof(IsEditing));
+            CommandManager.InvalidateRequerySuggested();
         }
     }
 
-    public string ToggleText => IsOn ? "Canvas on: sentences appear in OBS" : "Canvas off";
-    public string Summary => IsOn ? "On" : "Off";
-    public string Url => _server?.Url ?? $"http://127.0.0.1:{OverlayServer.DefaultPort}/";
-    public string PreviewUrl => Url + "?preview=1";
-    public bool IsRunning => _server is not null;
+    public bool IsEditing => Editing is not null;
+
+    // Whether any canvas is on (the dot on the toolbar button).
+    public bool AnyOn => Canvases.Any(c => c.IsOn);
 
     public string Status
     {
@@ -143,99 +178,159 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _status, value);
     }
 
-    // -- the style
+    public bool IsRunning => _server is not null;
 
-    public int CanvasWidth { get => _style.Width; set => Set(_style.Width, Math.Clamp(value, 50, 7680), v => _style.Width = v); }
-    public int CanvasHeight { get => _style.Height; set => Set(_style.Height, Math.Clamp(value, 20, 4320), v => _style.Height = v); }
+    // -- canvases
 
-    public string FontFamily
+    private CanvasViewModel Wrap(OverlayStyle style)
     {
-        get => _style.FontFamily;
-        set => Set(_style.FontFamily, string.IsNullOrWhiteSpace(value) ? "Segoe UI" : value.Trim(), v => _style.FontFamily = v);
+        var canvas = new CanvasViewModel(style, OnCanvasChanged);
+        canvas.SetUrl(UrlOf(style.Id));
+        return canvas;
     }
 
-    public double FontSize { get => _style.FontSize; set => Set(_style.FontSize, Math.Round(value), v => _style.FontSize = v, nameof(FontSizeText)); }
-    public string FontSizeText => $"{FontSize:0} px";
-    public bool Bold { get => _style.Bold; set => Set(_style.Bold, value, v => _style.Bold = v); }
-    public string TextColor { get => _style.Color; set => SetColor(_style.Color, value, v => _style.Color = v); }
-    public TextCase Case { get => _style.Case; set => Set(_style.Case, value, v => _style.Case = v); }
-    public HorizontalAlign HorizontalAlign { get => _style.HorizontalAlign; set => Set(_style.HorizontalAlign, value, v => _style.HorizontalAlign = v); }
-    public VerticalAlign VerticalAlign { get => _style.VerticalAlign; set => Set(_style.VerticalAlign, value, v => _style.VerticalAlign = v); }
-    public double LineHeight { get => _style.LineHeight; set => Set(_style.LineHeight, Math.Round(value, 2), v => _style.LineHeight = v, nameof(LineHeightText)); }
-    public string LineHeightText => $"{LineHeight:0.00}×";
+    private string UrlOf(string id) => $"http://127.0.0.1:{_port}/c/{id}";
 
-    public bool Shadow { get => _style.Shadow; set => Set(_style.Shadow, value, v => _style.Shadow = v); }
-    public double ShadowX { get => _style.ShadowX; set => Set(_style.ShadowX, Math.Round(value), v => _style.ShadowX = v, nameof(ShadowXText)); }
-    public string ShadowXText => $"{ShadowX:0} px";
-    public double ShadowY { get => _style.ShadowY; set => Set(_style.ShadowY, Math.Round(value), v => _style.ShadowY = v, nameof(ShadowYText)); }
-    public string ShadowYText => $"{ShadowY:0} px";
-    public double ShadowBlur { get => _style.ShadowBlur; set => Set(_style.ShadowBlur, Math.Round(value), v => _style.ShadowBlur = v, nameof(ShadowBlurText)); }
-    public string ShadowBlurText => $"{ShadowBlur:0} px";
-    public string ShadowColor { get => _style.ShadowColor; set => SetColor(_style.ShadowColor, value, v => _style.ShadowColor = v); }
-
-    public double OutlineWidth { get => _style.OutlineWidth; set => Set(_style.OutlineWidth, Math.Round(value), v => _style.OutlineWidth = v, nameof(OutlineWidthText)); }
-    public string OutlineWidthText => OutlineWidth == 0 ? "None" : $"{OutlineWidth:0} px";
-    public string OutlineColor { get => _style.OutlineColor; set => SetColor(_style.OutlineColor, value, v => _style.OutlineColor = v); }
-
-    public double Lines { get => _style.Lines; set => Set(_style.Lines, (int)Math.Round(value), v => _style.Lines = v, nameof(LinesText)); }
-    public string LinesText => _style.Lines == 1 ? "1 sentence" : $"{_style.Lines} sentences";
-    public double HideAfter { get => _style.HideAfterSeconds; set => Set(_style.HideAfterSeconds, Math.Round(value), v => _style.HideAfterSeconds = v, nameof(HideAfterText)); }
-    public string HideAfterText => HideAfter == 0 ? "Never" : $"{HideAfter:0} s";
-
-    private void Set<T>(T current, T value, Action<T> apply, string? also = null, [CallerMemberName] string? name = null)
+    private void OnCanvasChanged(CanvasViewModel canvas, bool imageChanged)
     {
-        if (EqualityComparer<T>.Default.Equals(current, value))
-            return;
-        apply(value);
-        OnPropertyChanged(name);
-        if (also is not null)
-            OnPropertyChanged(also);
-        _server?.SetStyle(_style);
+        _server?.SetCanvas(canvas.Style, imageChanged);
+        OnPropertyChanged(nameof(AnyOn));
+        UpdateServer();
         _changed();
     }
 
-    // A color typed as #RRGGBB or #AARRGGBB; anything else is ignored until it becomes a color.
-    private void SetColor(string current, string value, Action<string> apply, [CallerMemberName] string? name = null)
+    private void Add()
     {
-        var text = value.Trim();
-        if (!text.StartsWith('#'))
-            text = "#" + text;
-        if (OverlayStyle.TryParse(text, out _, out _, out _, out _))
-            Set(current, text.ToUpperInvariant(), apply, null, name);
+        var name = $"Canvas {Canvases.Count + 1}";
+        for (int n = Canvases.Count + 2; Canvases.Any(c => c.Name == name); n++)
+            name = $"Canvas {n}";
+        var canvas = Wrap(new OverlayStyle { Name = name });
+        Canvases.Add(canvas);
+        _server?.SetCanvas(canvas.Style);
+        OnPropertyChanged(nameof(AnyOn));
+        UpdateServer();
+        _changed();
+        Editing = canvas;
     }
 
+    // First press asks, the second deletes.
+    public bool ConfirmDelete
+    {
+        get => _confirmDelete;
+        private set
+        {
+            if (SetProperty(ref _confirmDelete, value))
+                OnPropertyChanged(nameof(DeleteText));
+        }
+    }
+
+    public string DeleteText => ConfirmDelete ? "Click again to delete" : "Delete canvas";
+
+    private void Delete()
+    {
+        if (Editing is not { } canvas)
+            return;
+        if (!ConfirmDelete)
+        {
+            ConfirmDelete = true;
+            return;
+        }
+        Canvases.Remove(canvas);
+        _server?.RemoveCanvas(canvas.Id);
+        OverlayImages.Remove(canvas.Id);
+        Editing = null;
+        OnPropertyChanged(nameof(AnyOn));
+        UpdateServer();
+        _changed();
+    }
+
+    // Back to the default look; the canvas keeps its name, size, switch and address.
     private void Reset()
     {
+        if (Editing is not { } canvas)
+            return;
         var defaults = new OverlayStyle();
-        foreach (var property in typeof(OverlayStyle).GetProperties())
-            property.SetValue(_style, property.GetValue(defaults));
-        OnPropertyChanged(string.Empty); // every property
-        _server?.SetStyle(_style);
-        _changed();
+        var keep = new[] { nameof(OverlayStyle.Id), nameof(OverlayStyle.Name), nameof(OverlayStyle.IsOn), nameof(OverlayStyle.Width), nameof(OverlayStyle.Height) };
+        foreach (var property in typeof(OverlayStyle).GetProperties().Where(p => p.CanWrite && !keep.Contains(p.Name)))
+            property.SetValue(canvas.Style, property.GetValue(defaults));
+        OverlayImages.Remove(canvas.Id);
+        canvas.Refresh();
+        OnCanvasChanged(canvas, true);
+    }
+
+    private void ChooseImage()
+    {
+        if (Editing is not { } canvas)
+            return;
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Background picture",
+            Filter = "Pictures|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp"
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+        try
+        {
+            canvas.SetImage(OverlayImages.Import(canvas.Id, dialog.FileName));
+            Status = "";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Status = $"Couldn't use that picture: {ex.Message}";
+        }
     }
 
     public void WriteTo(AppState state)
     {
-        state.Obs = _style.Clone();
-        state.ObsOn = IsOn;
+        state.ObsCanvases = Canvases.Select(c => c.Style.Clone()).ToList();
+        state.ObsPort = _port;
+        state.Obs = null;
+        state.ObsOn = false;
     }
 
-    // -- the page server
+    // -- the port and the server
+
+    public string PortText
+    {
+        get => _portText;
+        set => SetProperty(ref _portText, value);
+    }
+
+    private void ApplyPort()
+    {
+        if (!int.TryParse(PortText.Trim(), out var port) || port is < 1024 or > 65535)
+        {
+            Status = "The port must be a number from 1024 to 65535.";
+            return;
+        }
+        if (port == _port)
+            return;
+        _port = port;
+        PortText = port.ToString();
+        _server?.Dispose();
+        _server = null;
+        foreach (var canvas in Canvases)
+            canvas.SetUrl(UrlOf(canvas.Id));
+        UpdateServer();
+        Status = IsRunning ? $"Now on port {port}. Update the address in OBS." : Status;
+        _changed();
+    }
 
     private void UpdateServer()
     {
-        var wanted = IsOn || IsOpen;
+        var wanted = AnyOn || IsOpen;
         if (wanted && _server is null)
         {
             try
             {
-                _server = new OverlayServer();
-                _server.SetStyle(_style);
-                Status = IsOn ? "Waiting for sentences." : "";
+                _server = new OverlayServer(_port);
+                foreach (var canvas in Canvases)
+                    _server.SetCanvas(canvas.Style);
+                Status = "";
             }
             catch (HttpListenerException ex)
             {
-                Status = $"Couldn't start the overlay on port {OverlayServer.DefaultPort}: {ex.Message}. Is another app using it?";
+                Status = $"Couldn't start the overlay on port {_port}: {ex.Message.TrimEnd('.')}. Another app may be using it; choose another port.";
             }
         }
         else if (!wanted && _server is not null)
@@ -244,24 +339,18 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
             _server = null;
         }
         OnPropertyChanged(nameof(IsRunning));
-        OnPropertyChanged(nameof(Url));
-        OnPropertyChanged(nameof(PreviewUrl));
     }
 
-    // A sentence that was just said, for the screen.
+    // A sentence that was just said, for every canvas that is on.
     public void Show(string text)
     {
-        if (!IsOn || _server is null)
+        if (!AnyOn || _server is null)
             return;
         _server.Show(text);
         Status = $"Last sentence sent at {DateTime.Now:HH:mm:ss}.";
     }
 
-    public void Clear()
-    {
-        if (IsOn)
-            _server?.Clear();
-    }
+    public void Clear() => _server?.Clear();
 
     // -- fonts
 
@@ -274,7 +363,7 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         Families.Clear();
         foreach (var family in all)
             Families.Add(family);
-        OnPropertyChanged(nameof(FontFamily)); // keep the selection shown after the list changed
+        Editing?.Refresh(); // keep the selection shown after the list changed
     }
 
     public string FontQuery
@@ -320,11 +409,11 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or KeyNotFoundException)
         {
-            SearchStatus = "Couldn't get the Google Fonts list. Type the exact family name and press Install it.";
+            SearchStatus = "Couldn't get the Google Fonts list. Type the exact family name and press Enter to install it.";
         }
     }
 
-    // Installs a family the first time, then uses it.
+    // Installs a family the first time, then uses it on the canvas being edited.
     private async Task FontActionAsync(FontResult result)
     {
         if (result.IsBusy)
@@ -332,15 +421,16 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         if (!result.IsInstalled && !await InstallAsync(result.Family, busy => result.IsBusy = busy))
             return;
         result.IsInstalled = true;
-        FontFamily = result.Family;
+        if (Editing is { } canvas)
+            canvas.FontFamily = result.Family;
     }
 
     // For when the list can't be reached: installs the family typed in the search box.
     private async Task InstallTypedAsync()
     {
         var family = FontQuery.Trim();
-        if (await InstallAsync(family, _ => { }))
-            FontFamily = family;
+        if (await InstallAsync(family, _ => { }) && Editing is { } canvas)
+            canvas.FontFamily = family;
     }
 
     private async Task<bool> InstallAsync(string family, Action<bool> busy)

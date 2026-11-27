@@ -6,31 +6,32 @@
 <link id="fonts" rel="stylesheet" href="/fonts.css">
 <style>
   html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  /* The canvas is the Browser Source's area; the box inside it carries the background, border and padding. */
   #canvas {
     position: absolute; left: 0; top: 0; box-sizing: border-box;
-    display: flex; flex-direction: column; overflow: hidden;
-    transform-origin: 0 0;
+    display: flex; flex-direction: column; overflow: hidden; transform-origin: 0 0;
   }
-  #canvas.top { justify-content: flex-start; }
-  #canvas.middle { justify-content: center; }
-  #canvas.bottom { justify-content: flex-end; }
-  .line {
-    white-space: pre-wrap; overflow-wrap: break-word;
-    paint-order: stroke fill;
+  #box {
+    box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+    max-width: 100%; max-height: 100%;
     transition: opacity 0.4s ease;
   }
-  .line.gone { opacity: 0; }
+  #box.empty { opacity: 0; }
+  .line { white-space: pre-wrap; overflow-wrap: break-word; paint-order: stroke fill; }
   /* Preview inside WalkTalk: a checkerboard shows what is transparent, and the canvas is scaled to fit. */
   body.preview { background: repeating-conic-gradient(#3a3a3a 0 25%, #2c2c2c 0 50%) 0 0 / 24px 24px; }
   body.preview #canvas { outline: 1px dashed rgba(255,255,255,0.35); }
 </style>
 </head>
 <body>
-<div id="canvas"></div>
+<div id="canvas"><div id="box" class="empty"></div></div>
 <script>
+  const id = location.pathname.split('/').filter(Boolean).pop();
   const preview = new URLSearchParams(location.search).has('preview');
   const sample = ['This is how your transcript', 'will look in OBS.'];
   const canvas = document.getElementById('canvas');
+  const box = document.getElementById('box');
+  const place = { top: 'flex-start', middle: 'center', bottom: 'flex-end', left: 'flex-start', center: 'center', right: 'flex-end' };
   let style = null, lines = [], timer = null;
   if (preview) document.body.classList.add('preview');
 
@@ -38,13 +39,21 @@
     if (!style || style.width === undefined) return;
     Object.assign(canvas.style, {
       width: style.width + 'px', height: style.height + 'px',
+      justifyContent: place[style.verticalAlign],   // where the box sits vertically
+      alignItems: style.autoWidth ? place[style.textAlign] : 'stretch',
+    });
+    Object.assign(box.style, {
+      width: style.autoWidth ? 'fit-content' : '100%',
+      height: style.autoHeight ? 'auto' : '100%',
+      justifyContent: place[style.verticalAlign],   // where the text sits inside a full-height box
+      padding: style.padding, background: style.background,
+      border: style.border, borderRadius: style.borderRadius + 'px',
       fontFamily: style.fontFamily, fontSize: style.fontSize + 'px', fontWeight: style.fontWeight,
       color: style.color, textTransform: style.textTransform, textAlign: style.textAlign,
       lineHeight: style.lineHeight, textShadow: style.textShadow,
       // The outline is drawn under the letters (paint-order), so only its outer half shows: double it.
       webkitTextStroke: style.outlineWidth > 0 ? (style.outlineWidth * 2) + 'px ' + style.outlineColor : '0',
     });
-    canvas.className = style.verticalAlign;
     fit();
     render();
   }
@@ -59,25 +68,26 @@
 
   function render() {
     const shown = lines.length ? lines : (preview ? sample : []);
-    canvas.replaceChildren(...shown.map(text => {
+    box.replaceChildren(...shown.map(text => {
       const div = document.createElement('div');
       div.className = 'line';
       div.textContent = text;
       return div;
     }));
+    box.classList.toggle('empty', shown.length === 0);
   }
 
   function hideLater() {
     clearTimeout(timer);
     if (!style || !style.hideAfter || preview) return;
     timer = setTimeout(() => {
-      canvas.querySelectorAll('.line').forEach(l => l.classList.add('gone'));
+      box.classList.add('empty');
       setTimeout(() => { lines = []; render(); }, 450);
     }, style.hideAfter * 1000);
   }
 
-  const events = new EventSource('/events');
-  events.addEventListener('style', e => { style = JSON.parse(e.data); applyStyle(); });
+  const events = new EventSource('/events?c=' + encodeURIComponent(id));
+  events.addEventListener('style', e => { style = JSON.parse(e.data); lines = lines.slice(-style.lines); applyStyle(); });
   events.addEventListener('line', e => {
     lines.push(JSON.parse(e.data).text);
     lines = lines.slice(-(style ? style.lines : 2));
@@ -85,10 +95,7 @@
     hideLater();
   });
   events.addEventListener('clear', () => { lines = []; render(); });
-  events.addEventListener('fonts', () => {
-    const link = document.getElementById('fonts');
-    link.href = '/fonts.css?' + Date.now();
-  });
+  events.addEventListener('fonts', () => { document.getElementById('fonts').href = '/fonts.css?' + Date.now(); });
   addEventListener('resize', fit);
 </script>
 </body>

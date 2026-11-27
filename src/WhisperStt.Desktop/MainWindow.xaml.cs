@@ -41,10 +41,10 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(() => ReplacementSearchBox.Focus(), DispatcherPriority.Input);
         };
         _viewModel.Replacements.Picked += () => Dispatcher.BeginInvoke(() => ReplacementCustomBox.Focus(), DispatcherPriority.Input);
-        // The OBS dialog's preview shows the overlay page itself, loaded when the dialog opens.
+        // The canvas editor's preview shows that canvas's overlay page itself, loaded when a canvas is opened.
         _viewModel.Obs.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(ObsViewModel.IsOpen) && _viewModel.Obs.IsOpen)
+            if (e.PropertyName == nameof(ObsViewModel.Editing) && _viewModel.Obs.Editing is not null)
                 _ = ShowObsPreviewAsync();
         };
     }
@@ -52,6 +52,8 @@ public partial class MainWindow : Window
     private async Task ShowObsPreviewAsync()
     {
         var obs = _viewModel.Obs;
+        if (obs.Editing is not { } canvas)
+            return;
         if (!obs.IsRunning)
         {
             ObsPreviewMessage.Text = obs.Status;
@@ -68,7 +70,7 @@ public partial class MainWindow : Window
                 ObsPreview.CoreWebView2!.Settings.AreDefaultContextMenusEnabled = false;
                 ObsPreview.CoreWebView2.Settings.AreDevToolsEnabled = false;
             }
-            ObsPreview.CoreWebView2!.Navigate(obs.PreviewUrl);
+            ObsPreview.CoreWebView2!.Navigate(canvas.PreviewUrl);
             ObsPreviewMessage.Visibility = Visibility.Collapsed;
         }
         catch (Exception ex) when (ex is Microsoft.Web.WebView2.Core.WebView2RuntimeNotFoundException or System.Runtime.InteropServices.COMException)
