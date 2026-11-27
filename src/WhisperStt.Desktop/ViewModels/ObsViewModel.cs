@@ -90,6 +90,10 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         FontActionCommand = new RelayCommand<FontResult>(result => _ = FontActionAsync(result));
         InstallTypedCommand = new RelayCommand(() => _ = InstallTypedAsync(), () => FontQuery.Trim().Length > 0);
         AddFontFileCommand = new RelayCommand(AddFontFile);
+        ChooseSoundCommand = new RelayCommand<SoundViewModel>(ChooseSound);
+        PlaySoundCommand = new RelayCommand<SoundViewModel>(s => PlayRequested?.Invoke(s.Slot));
+        PlayDemoCommand = new RelayCommand(() => DemoRequested?.Invoke());
+        SoundViewModel.FileWanted += ChooseSound;
         UpdateServer();
     }
 
@@ -106,6 +110,27 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
     public ICommand FontActionCommand { get; }
     public ICommand InstallTypedCommand { get; }
     public ICommand AddFontFileCommand { get; }
+    public ICommand ChooseSoundCommand { get; }
+    public ICommand PlaySoundCommand { get; }
+    public ICommand PlayDemoCommand { get; }
+
+    // The preview plays these (it holds the page that makes the sounds and animations).
+    public event Action<string>? PlayRequested;
+    public event Action? DemoRequested;
+
+    public IReadOnlyList<Choice<string>> SoundKinds => SoundViewModel.Kinds;
+
+    public IReadOnlyList<Choice<RevealUnit>> RevealUnits { get; } =
+        [new(RevealUnit.Character, "Character by character"), new(RevealUnit.Word, "Word by word")];
+
+    public IReadOnlyList<Choice<RevealEffect>> RevealEffects { get; } =
+        [new(RevealEffect.Appear, "Appear"), new(RevealEffect.Fade, "Fade in"), new(RevealEffect.Pop, "Pop"), new(RevealEffect.Rise, "Rise")];
+
+    public IReadOnlyList<Choice<ClearAnimation>> ClearAnimations { get; } =
+    [
+        new(ClearAnimation.Fade, "Fade out"), new(ClearAnimation.SlideUp, "Slide up"), new(ClearAnimation.SlideDown, "Slide down"),
+        new(ClearAnimation.Shrink, "Shrink"), new(ClearAnimation.None, "None (instant)")
+    ];
 
     // Where the preview's browser keeps its data. Settable so tests can keep it apart from the user's.
     public static string PreviewDataFolder { get; set; } = Path.Combine(
@@ -240,6 +265,7 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         Canvases.Remove(canvas);
         _server?.RemoveCanvas(canvas.Id);
         OverlayImages.Remove(canvas.Id);
+        OverlayImages.RemoveSounds(canvas.Id);
         OverlayImages.RemoveThumbnail(canvas.Id);
         Editing = null;
         OnPropertyChanged(nameof(AnyOn));
@@ -257,8 +283,42 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         foreach (var property in typeof(OverlayStyle).GetProperties().Where(p => p.CanWrite && !keep.Contains(p.Name)))
             property.SetValue(canvas.Style, property.GetValue(defaults));
         OverlayImages.Remove(canvas.Id);
+        OverlayImages.RemoveSounds(canvas.Id);
         canvas.Refresh();
         OnCanvasChanged(canvas, true);
+    }
+
+    private void ChooseSound(SoundViewModel sound)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = $"{sound.Title} sound",
+            Filter = "Sounds|*.mp3;*.wav;*.ogg;*.m4a;*.aac;*.flac;*.webm"
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            if (sound.FileText == "No file chosen")
+                sound.Kind = ""; // nothing chosen: back to no sound
+            return;
+        }
+        SetSoundFile(sound, dialog.FileName);
+    }
+
+    // Separate from the dialog so it can be tested.
+    public bool SetSoundFile(SoundViewModel sound, string path)
+    {
+        try
+        {
+            sound.SetFile(OverlayImages.ImportSound(sound.Canvas.Id, sound.Slot, path));
+            sound.Kind = "file";
+            Status = "";
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Status = $"Couldn't use that sound: {ex.Message}";
+            return false;
+        }
     }
 
     private void ChooseImage()
@@ -516,6 +576,7 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _search?.Cancel();
+        SoundViewModel.FileWanted -= ChooseSound;
         _server?.Dispose();
         _server = null;
     }

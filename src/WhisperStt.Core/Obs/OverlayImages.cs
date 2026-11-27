@@ -29,6 +29,44 @@ public static class OverlayImages
             File.Delete(Path.Combine(Directory, canvasId + extension));
     }
 
+    // -- sounds a canvas plays (typing, sentence, show, hide), copied here like the pictures
+
+    public static readonly string[] SoundExtensions = [".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac", ".webm"];
+
+    public static string ImportSound(string canvasId, string slot, string sourcePath)
+    {
+        var extension = Path.GetExtension(sourcePath).ToLowerInvariant();
+        if (!SoundExtensions.Contains(extension))
+            throw new InvalidOperationException("Choose an MP3, WAV, OGG, M4A, AAC, FLAC or WebM sound.");
+        System.IO.Directory.CreateDirectory(Directory);
+        RemoveSound(canvasId, slot);
+        var name = $"{canvasId}-{slot}{extension}";
+        File.Copy(sourcePath, Path.Combine(Directory, name), overwrite: true);
+        return name;
+    }
+
+    public static void RemoveSound(string canvasId, string slot)
+    {
+        foreach (var extension in SoundExtensions)
+            File.Delete(Path.Combine(Directory, $"{canvasId}-{slot}{extension}"));
+    }
+
+    public static void RemoveSounds(string canvasId)
+    {
+        foreach (var slot in new[] { "typing", "sentence", "show", "hide" })
+            RemoveSound(canvasId, slot);
+    }
+
+    public static string SoundContentType(string name) => Path.GetExtension(name).ToLowerInvariant() switch
+    {
+        ".wav" => "audio/wav",
+        ".ogg" => "audio/ogg",
+        ".m4a" or ".aac" => "audio/mp4",
+        ".flac" => "audio/flac",
+        ".webm" => "audio/webm",
+        _ => "audio/mpeg"
+    };
+
     // A picture of how a canvas looks, taken from its preview, for its tile in the canvas list.
     public static string ThumbnailPath(string canvasId) => Path.Combine(Directory, canvasId + ".thumb.png");
 

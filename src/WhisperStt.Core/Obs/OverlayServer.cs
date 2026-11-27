@@ -158,6 +158,8 @@ public sealed class OverlayServer : IDisposable
                 Send(response, GoogleFonts.ContentType(font), File.ReadAllBytes(font));
             else if (path.StartsWith("/bg/", StringComparison.Ordinal) && ImageOf(path["/bg/".Length..]) is { } image)
                 Send(response, OverlayImages.ContentType(image), File.ReadAllBytes(image));
+            else if (path.StartsWith("/sound/", StringComparison.Ordinal) && SoundOf(path["/sound/".Length..]) is { } sound)
+                Send(response, OverlayImages.SoundContentType(sound), File.ReadAllBytes(sound));
             else
             {
                 response.StatusCode = 404;
@@ -174,6 +176,21 @@ public sealed class OverlayServer : IDisposable
     {
         lock (_gate)
             return _canvases.TryGetValue(canvasId, out var canvas) ? OverlayImages.PathOf(canvas.BackgroundImage) : null;
+    }
+
+    // "/sound/<canvas>/<slot>": the sound file a canvas uses for that moment.
+    private string? SoundOf(string rest)
+    {
+        var parts = rest.Split('/');
+        if (parts.Length != 2)
+            return null;
+        lock (_gate)
+        {
+            if (!_canvases.TryGetValue(parts[0], out var canvas))
+                return null;
+            var sound = canvas.Sounds().FirstOrDefault(s => s.Slot == parts[1]).Sound;
+            return sound is { Kind: "file" } ? OverlayImages.PathOf(sound.File) : null;
+        }
     }
 
     private static void Send(HttpListenerResponse response, string type, byte[] body)

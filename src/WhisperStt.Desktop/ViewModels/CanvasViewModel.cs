@@ -208,8 +208,42 @@ public sealed class CanvasViewModel : ObservableObject
     public double BorderRadius { get => Style.BorderRadius; set => Set(Style.BorderRadius, Math.Round(value), v => Style.BorderRadius = v, nameof(BorderRadiusText)); }
     public string BorderRadiusText => $"{BorderRadius:0} px";
 
+    // -- animation
+    public bool Animate { get => Style.Animate; set => Set(Style.Animate, value, v => Style.Animate = v); }
+    public RevealUnit RevealUnit { get => Style.RevealUnit; set => Set(Style.RevealUnit, value, v => Style.RevealUnit = v); }
+    public RevealEffect RevealEffect { get => Style.RevealEffect; set => Set(Style.RevealEffect, value, v => Style.RevealEffect = v); }
+    public double CharacterInterval { get => Style.CharacterInterval; set => Set(Style.CharacterInterval, Math.Round(value), v => Style.CharacterInterval = v, nameof(CharacterIntervalText)); }
+    public string CharacterIntervalText => $"{CharacterInterval:0} ms";
+    public double WordPause { get => Style.WordPause; set => Set(Style.WordPause, Math.Round(value), v => Style.WordPause = v, nameof(WordPauseText)); }
+    public string WordPauseText => $"{WordPause:0} ms";
+    public double SentenceInterval { get => Style.SentenceInterval; set => Set(Style.SentenceInterval, Math.Round(value / 50) * 50, v => Style.SentenceInterval = v, nameof(SentenceIntervalText)); }
+    public string SentenceIntervalText => $"{SentenceInterval / 1000:0.##} s";
+    public bool ReplacePrevious { get => Style.ReplacePrevious; set => Set(Style.ReplacePrevious, value, v => Style.ReplacePrevious = v); }
+    public ClearAnimation ClearAnimation { get => Style.ClearAnimation; set => Set(Style.ClearAnimation, value, v => Style.ClearAnimation = v); }
+    public double ClearDuration { get => Style.ClearDuration; set => Set(Style.ClearDuration, Math.Round(value / 50) * 50, v => Style.ClearDuration = v, nameof(ClearDurationText)); }
+    public string ClearDurationText => $"{ClearDuration:0} ms";
+
+    // -- sounds
+    private IReadOnlyList<SoundViewModel>? _sounds;
+    public IReadOnlyList<SoundViewModel> Sounds => _sounds ??=
+    [
+        new SoundViewModel(this, "typing", "Typing", "Each character (or word) as it appears", () => Style.TypingSound),
+        new SoundViewModel(this, "sentence", "New sentence", "When a sentence starts", () => Style.SentenceSound),
+        new SoundViewModel(this, "show", "Show", "When the box appears", () => Style.ShowSound),
+        new SoundViewModel(this, "hide", "Hide", "When the box is cleared", () => Style.HideSound),
+    ];
+
+    // A sound setting changed (fileChanged: a new file, so OBS must fetch it again).
+    public void SoundChanged(bool fileChanged) => _changed(this, fileChanged);
+
     // Every property again (after a reset), and the tile.
-    public void Refresh() => OnPropertyChanged(string.Empty);
+    public void Refresh()
+    {
+        OnPropertyChanged(string.Empty);
+        if (_sounds is not null)
+            foreach (var sound in _sounds)
+                sound.Refresh();
+    }
 
     private void Set<T>(T current, T value, Action<T> apply, string? also = null, [CallerMemberName] string? name = null)
     {

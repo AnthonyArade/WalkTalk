@@ -13,7 +13,7 @@ WalkTalk can also learn your voice: read a set of sentences aloud and it retrain
 - **Voice commands.** Say "Clean" to empty the fields, or "Send" / "Enter" to press Enter.
 - **Word hints.** Names and terms Whisper should spell exactly (usernames, games, jargon).
 - **Word replacements.** Search the words the model knows and write something else in their place: an abbreviation, slang, an emoji.
-- **OBS overlay.** Shows each sentence on your stream through OBS Browser Sources, on as many canvases as you like, each styled your way: size, box (auto width/height, padding), font (any font on your PC, a font file you add, or Google Fonts you search and install), weight, size, color, letter case, alignment, line height, text shadow, outline, background (color, gradient or picture) and border, with a live preview.
+- **OBS overlay.** Shows each sentence on your stream through OBS Browser Sources, on as many canvases as you like, each styled your way: size, box (auto width/height, padding), font (any font on your PC, a font file you add, or Google Fonts you search and install), weight, size, color, letter case, alignment, line height, text shadow, outline, background (color, gradient or picture), border, text animation (character or word reveal, intervals, clear animation, replace the previous sentence) and sounds (typing, new sentence, show, hide, built-in or your own files, each with its volume), with a live preview.
 - **Read aloud (TTS).** Optionally reads each sentence back with a natural Kokoro voice, also offline.
 - **Voice training.** Retrains the model on your recordings so it understands your accent better (see below).
 - **Dark and light themes.**

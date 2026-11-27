@@ -7,6 +7,20 @@ public enum HorizontalAlign { Left, Center, Right }
 public enum VerticalAlign { Top, Middle, Bottom }
 public enum BackgroundType { None, Color, Gradient, Image }
 public enum ImageFit { Cover, Contain, Stretch, Tile }
+public enum RevealUnit { Character, Word }
+public enum RevealEffect { Appear, Fade, Pop, Rise }
+public enum ClearAnimation { None, Fade, SlideUp, SlideDown, Shrink }
+
+// A sound the overlay plays: one of the built-in sounds (made by the page itself, nothing to download), a file
+// the user chose ("file", copied into WalkTalk's data), or nothing ("").
+public sealed class OverlaySound
+{
+    public string Kind { get; set; } = "";
+    public string File { get; set; } = "";
+    public double Volume { get; set; } = 0.6;
+
+    public OverlaySound Clone() => (OverlaySound)MemberwiseClone();
+}
 
 // One OBS canvas: a Browser Source page with its own size and look. Colors are "#RRGGBB" or "#AARRGGBB"
 // (alpha first, as in WPF).
@@ -72,9 +86,39 @@ public sealed class OverlayStyle
     public string BorderColor { get; set; } = "#FFFFFF";
     public double BorderRadius { get; set; } = 12;
 
+    // -- animation: each sentence is revealed a character or a word at a time
+    public bool Animate { get; set; }
+    public RevealUnit RevealUnit { get; set; } = RevealUnit.Character;
+    public RevealEffect RevealEffect { get; set; } = RevealEffect.Fade;
+    public double CharacterInterval { get; set; } = 35;    // ms between two characters (or words)
+    public double WordPause { get; set; } = 60;            // extra ms after each word
+    public double SentenceInterval { get; set; } = 400;    // ms before the next waiting sentence starts
+    // A new sentence takes the place of the one on screen instead of being added under it.
+    public bool ReplacePrevious { get; set; }
+    public ClearAnimation ClearAnimation { get; set; } = ClearAnimation.Fade;
+    public double ClearDuration { get; set; } = 400;       // ms the clearing takes
+
+    // -- sounds
+    public OverlaySound TypingSound { get; set; } = new();
+    public OverlaySound SentenceSound { get; set; } = new();
+    public OverlaySound ShowSound { get; set; } = new();
+    public OverlaySound HideSound { get; set; } = new();
+
     public static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
-    public OverlayStyle Clone() => (OverlayStyle)MemberwiseClone();
+    public OverlayStyle Clone()
+    {
+        var copy = (OverlayStyle)MemberwiseClone();
+        copy.TypingSound = (TypingSound ?? new()).Clone();
+        copy.SentenceSound = (SentenceSound ?? new()).Clone();
+        copy.ShowSound = (ShowSound ?? new()).Clone();
+        copy.HideSound = (HideSound ?? new()).Clone();
+        return copy;
+    }
+
+    // The four sounds by the name the page and the sound files use.
+    public IEnumerable<(string Slot, OverlaySound Sound)> Sounds() =>
+        [("typing", TypingSound), ("sentence", SentenceSound), ("show", ShowSound), ("hide", HideSound)];
 
     // Fixes values from older settings files.
     public void Upgrade()
@@ -86,6 +130,10 @@ public sealed class OverlayStyle
         }
         if (string.IsNullOrWhiteSpace(Id))
             Id = NewId();
+        TypingSound ??= new();
+        SentenceSound ??= new();
+        ShowSound ??= new();
+        HideSound ??= new();
     }
 
     // What the overlay page receives: ready-to-use CSS values. imageVersion changes when the picture does,
@@ -134,6 +182,29 @@ public sealed class OverlayStyle
         },
         border = Border && BorderWidth > 0 ? $"{N(Math.Clamp(BorderWidth, 0, 100))}px solid {Css(BorderColor, "#FFFFFF")}" : "none",
         borderRadius = Math.Clamp(BorderRadius, 0, 1000),
+
+        animate = Animate,
+        revealUnit = RevealUnit.ToString().ToLowerInvariant(),
+        revealEffect = RevealEffect.ToString().ToLowerInvariant(),
+        characterInterval = Math.Clamp(CharacterInterval, 0, 2000),
+        wordPause = Math.Clamp(WordPause, 0, 5000),
+        sentenceInterval = Math.Clamp(SentenceInterval, 0, 20000),
+        replacePrevious = ReplacePrevious,
+        clearAnimation = ClearAnimation switch
+        {
+            ClearAnimation.SlideUp => "slide-up",
+            ClearAnimation.SlideDown => "slide-down",
+            ClearAnimation.Shrink => "shrink",
+            ClearAnimation.None => "none",
+            _ => "fade"
+        },
+        clearDuration = Math.Clamp(ClearDuration, 0, 5000),
+        sounds = Sounds().ToDictionary(s => s.Slot, s => new
+        {
+            kind = s.Sound.Kind == "file" && s.Sound.File.Length == 0 ? "" : s.Sound.Kind,
+            url = s.Sound.Kind == "file" && s.Sound.File.Length > 0 ? $"/sound/{Id}/{s.Slot}?v={imageVersion}" : "",
+            volume = Math.Clamp(s.Sound.Volume, 0, 1),
+        }),
     };
 
     // "#AARRGGBB" (WPF order) to CSS rgba(); anything that isn't a color gives the fallback.

@@ -50,6 +50,10 @@ public partial class MainWindow : Window
             if (_previewed is { } canvas && ObsPreview.IsVisible)
                 await SnapshotCanvasAsync(canvas);
         };
+        // The editor's Play buttons: the preview page plays a sound, or a demo of the animation.
+        _viewModel.Obs.PlayRequested += slot => _ = ObsPreview.CoreWebView2?.ExecuteScriptAsync(
+            $"window.walktalkPlay && walktalkPlay({System.Text.Json.JsonSerializer.Serialize(slot)})");
+        _viewModel.Obs.DemoRequested += () => _ = ObsPreview.CoreWebView2?.ExecuteScriptAsync("window.walktalkDemo && walktalkDemo()");
         _viewModel.Obs.PropertyChanged += async (_, e) =>
         {
             if (e.PropertyName != nameof(ObsViewModel.Editing))
@@ -124,7 +128,9 @@ public partial class MainWindow : Window
             if (ObsPreview.CoreWebView2 is null)
             {
                 // Its browser data goes with WalkTalk's other data, not next to the app.
-                var environment = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, ObsViewModel.PreviewDataFolder);
+                // Sounds may play without a click first, as they do in OBS.
+                var options = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions("--autoplay-policy=no-user-gesture-required");
+                var environment = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, ObsViewModel.PreviewDataFolder, options);
                 await ObsPreview.EnsureCoreWebView2Async(environment);
                 ObsPreview.CoreWebView2!.Settings.AreDefaultContextMenusEnabled = false;
                 ObsPreview.CoreWebView2.Settings.AreDevToolsEnabled = false;

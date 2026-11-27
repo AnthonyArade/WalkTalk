@@ -14,10 +14,25 @@
   #box {
     box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
     max-width: 100%; max-height: 100%;
-    transition: opacity 0.4s ease;
+    transition-property: opacity, transform; transition-timing-function: ease;
   }
   #box.empty { opacity: 0; }
+  /* How the box leaves when it is cleared */
+  #box.leave-fade { opacity: 0; }
+  #box.leave-slide-up { opacity: 0; transform: translateY(-40%); }
+  #box.leave-slide-down { opacity: 0; transform: translateY(40%); }
+  #box.leave-shrink { opacity: 0; transform: scale(0.85); }
   .line { white-space: pre-wrap; overflow-wrap: break-word; paint-order: stroke fill; }
+  .line.leaving { opacity: 0; transition: opacity 0.25s ease; }
+  /* Revealed pieces (characters or words): hidden ones keep their place, so lines wrap the same from the start */
+  .bit { display: inline; white-space: pre-wrap; }
+  .bit.wait { visibility: hidden; }
+  .bit.fade.on { animation: wt-fade var(--reveal) ease-out both; }
+  .bit.pop.on { display: inline-block; animation: wt-pop var(--reveal) cubic-bezier(.2,1.6,.4,1) both; }
+  .bit.rise.on { display: inline-block; animation: wt-rise var(--reveal) ease-out both; }
+  @keyframes wt-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes wt-pop { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: scale(1); } }
+  @keyframes wt-rise { from { opacity: 0; transform: translateY(0.35em); } to { opacity: 1; transform: translateY(0); } }
   /* Preview inside WalkTalk: a checkerboard shows what is transparent, and the canvas is scaled to fit. */
   body.preview { background: repeating-conic-gradient(#3a3a3a 0 25%, #2c2c2c 0 50%) 0 0 / 24px 24px; }
   body.preview #canvas { outline: 1px dashed rgba(255,255,255,0.35); }
@@ -38,9 +53,83 @@
   const canvas = document.getElementById('canvas');
   const box = document.getElementById('box');
   const place = { top: 'flex-start', middle: 'center', bottom: 'flex-end', left: 'flex-start', center: 'center', right: 'flex-end' };
-  let style = null, lines = [], timer = null;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let style = null, hideTimer = null, showingSamples = false;
+  const queue = [];        // sentences waiting their turn
+  let working = false;     // a sentence is being revealed
   if (preview) document.body.classList.add('preview');
 
+  // ---------- sounds ----------
+  // Built-in sounds are made here with the Web Audio API: nothing to download. A chosen file is fetched once.
+  // In the preview, sounds play only for "Play" tests and demos, so WalkTalk doesn't echo what OBS already plays.
+  let audio = null;
+  const buffers = {};
+  let soundsAllowed = !preview, lastTyping = 0;
+  function ctx() { return audio ??= new (window.AudioContext || window.webkitAudioContext)(); }
+
+  function tone(a, t, type, from, to, length, peak) {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(from, t);
+    if (to !== from) o.frequency.exponentialRampToValueAtTime(to, t + length);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + length);
+    o.connect(g); return { node: o, gain: g, length };
+  }
+  function noise(a, t, length, peak, filter, f1, f2) {
+    const b = a.createBuffer(1, Math.ceil(a.sampleRate * length), a.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const s = a.createBufferSource(); s.buffer = b;
+    const f = a.createBiquadFilter(); f.type = filter; f.frequency.setValueAtTime(f1, t);
+    if (f2) f.frequency.exponentialRampToValueAtTime(f2, t + length);
+    const g = a.createGain(); g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + Math.min(0.01, length / 3)); g.gain.exponentialRampToValueAtTime(0.0001, t + length);
+    s.connect(f); f.connect(g); return { node: s, gain: g, length };
+  }
+  const builtIn = {
+    click: (a, t) => [noise(a, t, 0.025, 0.7, 'highpass', 2500)],
+    tick: (a, t) => [tone(a, t, 'square', 1800, 1800, 0.02, 0.25)],
+    typewriter: (a, t) => [noise(a, t, 0.04, 0.9, 'bandpass', 1800), tone(a, t, 'triangle', 220, 120, 0.05, 0.3)],
+    bubble: (a, t) => [tone(a, t, 'sine', 500 + Math.random() * 300, 900, 0.06, 0.4)],
+    pop: (a, t) => [tone(a, t, 'sine', 900, 250, 0.12, 0.7)],
+    chime: (a, t) => [tone(a, t, 'sine', 1046, 1046, 0.5, 0.35), tone(a, t + 0.08, 'sine', 1568, 1568, 0.6, 0.25)],
+    ding: (a, t) => [tone(a, t, 'triangle', 1318, 1318, 0.7, 0.4)],
+    'whoosh-in': (a, t) => [noise(a, t, 0.35, 0.5, 'bandpass', 300, 2500)],
+    'whoosh-out': (a, t) => [noise(a, t, 0.35, 0.5, 'bandpass', 2500, 300)],
+    swoosh: (a, t) => [noise(a, t, 0.22, 0.6, 'highpass', 800, 5000)],
+  };
+
+  async function loadFile(url) {
+    if (!url || buffers[url]) return;
+    try {
+      const data = await (await fetch(url)).arrayBuffer();
+      buffers[url] = await ctx().decodeAudioData(data);
+    } catch { buffers[url] = null; }
+  }
+
+  function play(slot, force) {
+    const s = style && style.sounds && style.sounds[slot];
+    if (!s || !s.kind || s.volume <= 0 || (!soundsAllowed && !force)) return;
+    if (slot === 'typing') {            // no machine-gun clicks: at most one every 25 ms
+      const now = performance.now();
+      if (now - lastTyping < 25) return;
+      lastTyping = now;
+    }
+    const a = ctx();
+    if (a.state === 'suspended') a.resume();
+    const out = a.createGain(); out.gain.value = s.volume; out.connect(a.destination);
+    const t = a.currentTime + 0.005;
+    if (s.kind === 'file') {
+      const b = buffers[s.url];
+      if (!b) { loadFile(s.url); return; }
+      const src = a.createBufferSource(); src.buffer = b; src.connect(out); src.start(t);
+      return;
+    }
+    const make = builtIn[s.kind];
+    if (!make) return;
+    for (const part of make(a, t)) { part.gain.connect(out); part.node.start(t); part.node.stop(t + part.length + 0.05); }
+  }
+
+  // ---------- layout ----------
   function applyStyle() {
     if (!style || style.width === undefined) return;
     Object.assign(canvas.style, {
@@ -59,9 +148,12 @@
       lineHeight: style.lineHeight, textShadow: style.textShadow,
       // The outline is drawn under the letters (paint-order), so only its outer half shows: double it.
       webkitTextStroke: style.outlineWidth > 0 ? (style.outlineWidth * 2) + 'px ' + style.outlineColor : '0',
+      transitionDuration: (style.clearDuration || 0) + 'ms',
     });
+    box.style.setProperty('--reveal', Math.max(80, Math.min(400, (style.characterInterval || 35) * 6)) + 'ms');
+    for (const s of Object.values(style.sounds || {})) if (s.kind === 'file') loadFile(s.url);
     fit();
-    render();
+    if (showingSamples || (preview && !box.children.length)) showSamples();
   }
 
   // In the preview the canvas shrinks to fit the window; in OBS it is drawn at its real size.
@@ -72,35 +164,106 @@
     canvas.style.transform = `translate(${left}px, ${top}px) scale(${scale})`;
   }
 
-  function render() {
-    const shown = lines.length ? lines : (preview ? samples.slice(0, style ? style.lines : 2) : []);
-    box.replaceChildren(...shown.map(text => {
+  function line(text) { const div = document.createElement('div'); div.className = 'line'; div.textContent = text; return div; }
+
+  // The preview, while nothing has been said: the samples, shown at once.
+  function showSamples() {
+    if (queue.length || working) return;
+    showingSamples = true;
+    box.className = '';
+    box.replaceChildren(...samples.slice(0, style ? style.lines : 2).map(line));
+  }
+
+  // ---------- showing sentences ----------
+  function receive(text) {
+    queue.push(text);
+    if (!working) run();
+  }
+
+  async function run() {
+    working = true;
+    clearTimeout(hideTimer);
+    while (queue.length) {
+      const text = queue.shift();
+      if (showingSamples) { showingSamples = false; box.replaceChildren(); box.className = 'empty'; }
+      const wasEmpty = box.classList.contains('empty') || !box.children.length;
+      if (style.replacePrevious && !wasEmpty) await clearBox(false);
+      // Too many sentences: the oldest fades out first.
+      const keep = style.replacePrevious ? 1 : style.lines;
+      while (box.children.length >= keep) {
+        const old = box.firstElementChild;
+        if (style.animate) { old.classList.add('leaving'); await sleep(250); }
+        old.remove();
+      }
       const div = document.createElement('div');
       div.className = 'line';
-      div.textContent = text;
-      return div;
-    }));
-    box.classList.toggle('empty', shown.length === 0);
+      box.appendChild(div);
+      if (box.classList.contains('empty') || box.className.startsWith('leave')) {
+        box.className = '';
+        play('show');
+      }
+      play('sentence');
+      if (style.animate) await reveal(div, text);
+      else div.textContent = text;
+      if (queue.length && style.animate) await sleep(style.sentenceInterval);
+    }
+    working = false;
+    hideLater();
+  }
+
+  // Reveals a sentence a character or a word at a time. Every piece is laid out first (hidden), so the lines
+  // wrap where they will end up and nothing jumps while it types.
+  async function reveal(div, text) {
+    const pieces = style.revealUnit === 'word' ? text.split(/(\s+)/).filter(p => p.length) : Array.from(text);
+    const effect = style.revealEffect;
+    const spans = pieces.map(p => {
+      const s = document.createElement('span');
+      s.className = 'bit wait' + (effect === 'appear' ? '' : ' ' + effect);
+      s.textContent = p;
+      div.appendChild(s);
+      return s;
+    });
+    for (let i = 0; i < spans.length; i++) {
+      const s = spans[i], blank = !s.textContent.trim();
+      s.classList.remove('wait'); s.classList.add('on');
+      if (blank) continue;                     // spaces take no time
+      play('typing');
+      const endOfWord = style.revealUnit === 'word' || (i + 1 < spans.length && !spans[i + 1].textContent.trim());
+      await sleep(style.characterInterval + (endOfWord ? style.wordPause : 0));
+    }
+  }
+
+  // Empties the box with the clear animation.
+  async function clearBox(toEmpty) {
+    const kind = style.clearAnimation;
+    play('hide');
+    if (kind !== 'none' && style.clearDuration > 0) {
+      box.className = 'leave-' + kind;
+      await sleep(style.clearDuration);
+    }
+    box.replaceChildren();
+    box.className = toEmpty ? 'empty' : '';
   }
 
   function hideLater() {
-    clearTimeout(timer);
-    if (!style || !style.hideAfter || preview) return;
-    timer = setTimeout(() => {
-      box.classList.add('empty');
-      setTimeout(() => { lines = []; render(); }, 450);
+    clearTimeout(hideTimer);
+    if (!style || !style.hideAfter || (preview && showingSamples)) return;
+    hideTimer = setTimeout(async () => {
+      if (working || !box.children.length) return;
+      await clearBox(true);
+      if (preview) setTimeout(() => { if (!working && !box.children.length) showSamples(); }, 1500);
     }, style.hideAfter * 1000);
   }
 
+  // ---------- from WalkTalk ----------
+  // The preview's "Play" buttons: a demo of the animation (with its sounds), or one sound.
+  window.walktalkDemo = () => { soundsAllowed = true; queue.length = 0; samples.slice(0, Math.max(1, style.lines)).forEach(receive); };
+  window.walktalkPlay = slot => { play(slot, true); };
+
   const events = new EventSource('/events?c=' + encodeURIComponent(id));
-  events.addEventListener('style', e => { style = JSON.parse(e.data); lines = lines.slice(-style.lines); applyStyle(); });
-  events.addEventListener('line', e => {
-    lines.push(JSON.parse(e.data).text);
-    lines = lines.slice(-(style ? style.lines : 2));
-    render();
-    hideLater();
-  });
-  events.addEventListener('clear', () => { lines = []; render(); });
+  events.addEventListener('style', e => { style = JSON.parse(e.data); applyStyle(); });
+  events.addEventListener('line', e => receive(JSON.parse(e.data).text));
+  events.addEventListener('clear', () => { queue.length = 0; clearBox(true); });
   events.addEventListener('fonts', () => { document.getElementById('fonts').href = '/fonts.css?' + Date.now(); });
   addEventListener('resize', fit);
 </script>

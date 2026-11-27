@@ -148,6 +148,22 @@ public static class Program
                     canvas1.Background = WhisperStt.Core.Obs.BackgroundType.Gradient;
                     canvas1.BackgroundColor = "#CC9146FF"; canvas1.BackgroundColor2 = "#CC00F5D4"; canvas1.GradientAngle = 90;
                     canvas1.Border = true; canvas1.BorderWidth = 3; canvas1.BorderColor = "#FFFFFF"; canvas1.BorderRadius = 24;
+                    canvas1.Animate = true; canvas1.RevealUnit = WhisperStt.Core.Obs.RevealUnit.Character; canvas1.RevealEffect = WhisperStt.Core.Obs.RevealEffect.Pop;
+                    canvas1.CharacterInterval = 60; canvas1.WordPause = 120; canvas1.SentenceInterval = 800;
+                    canvas1.ReplacePrevious = true; canvas1.ClearAnimation = WhisperStt.Core.Obs.ClearAnimation.SlideUp; canvas1.ClearDuration = 500;
+                    canvas1.Sounds[0].Kind = "typewriter"; canvas1.Sounds[0].Volume = 0.4;
+                    canvas1.Sounds[1].Kind = "pop";
+                    canvas1.Sounds[3].Kind = "whoosh-out";
+                    // a sound file of our own for "show": a short beep written as a WAV
+                    var wavPath = Path.Combine(sandbox, "beep.wav");
+                    {
+                        const int rate = 22050; var samples = rate / 5;
+                        using var wav = new BinaryWriter(File.Create(wavPath));
+                        wav.Write("RIFF"u8); wav.Write(36 + samples * 2); wav.Write("WAVEfmt "u8); wav.Write(16); wav.Write((short)1); wav.Write((short)1);
+                        wav.Write(rate); wav.Write(rate * 2); wav.Write((short)2); wav.Write((short)16); wav.Write("data"u8); wav.Write(samples * 2);
+                        for (int i = 0; i < samples; i++) wav.Write((short)(Math.Sin(2 * Math.PI * 880 * i / rate) * 8000 * (1 - (double)i / samples)));
+                    }
+                    Console.WriteLine($"sound file set: {obs.SetSoundFile(canvas1.Sounds[2], wavPath)} -> {canvas1.Sounds[2].Kind} {canvas1.Style.ShowSound.File} ({canvas1.Sounds[2].FileText})");
                     Console.WriteLine($"canvas 1 \"{canvas1.Name}\" {canvas1.Url} | color after a bad value {canvas1.TextColor}");
 
                     obs.FontQuery = "bang";

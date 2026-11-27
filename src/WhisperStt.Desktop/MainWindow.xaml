@@ -2040,6 +2040,131 @@
                                         </Grid>
                                     </Expander>
 
+                                    <!-- Animation: each sentence revealed a character or a word at a time, and how the box clears -->
+                                    <Expander Style="{StaticResource ObsSectionExpander}" Header="Text animation" Tag="{Binding Animate, Mode=TwoWay}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="104" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="Reveal" Style="{StaticResource ObsLabel}" Margin="0" />
+                                            <ComboBox Grid.Column="1" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding RevealUnit}" IsEnabled="{Binding Animate}"
+                                                      ItemsSource="{Binding DataContext.Obs.RevealUnits, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      AutomationProperties.Name="Reveal" />
+                                            <TextBlock Grid.Row="1" Text="Effect" Style="{StaticResource ObsLabel}" />
+                                            <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding RevealEffect}"
+                                                      IsEnabled="{Binding Animate}" ItemsSource="{Binding DataContext.Obs.RevealEffects, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      AutomationProperties.Name="Reveal effect" ToolTip="How each character or word appears" />
+                                            <TextBlock Grid.Row="2" Text="Speed" Style="{StaticResource ObsLabel}" ToolTip="Time between two characters (or two words)" />
+                                            <DockPanel Grid.Row="2" Grid.Column="1" IsEnabled="{Binding Animate}">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding CharacterIntervalText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="5" Maximum="300" TickFrequency="5" Value="{Binding CharacterInterval}"
+                                                        AutomationProperties.Name="Time between characters" ToolTip="Time between two characters (or two words)" />
+                                            </DockPanel>
+                                            <TextBlock Grid.Row="3" Text="Word pause" Style="{StaticResource ObsLabel}" />
+                                            <DockPanel Grid.Row="3" Grid.Column="1" IsEnabled="{Binding Animate}">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding WordPauseText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="800" TickFrequency="10" Value="{Binding WordPause}"
+                                                        AutomationProperties.Name="Pause after each word" ToolTip="Extra pause after each word" />
+                                            </DockPanel>
+                                            <TextBlock Grid.Row="4" Text="Between sentences" Style="{StaticResource ObsLabel}" TextWrapping="Wrap" />
+                                            <DockPanel Grid.Row="4" Grid.Column="1" IsEnabled="{Binding Animate}">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding SentenceIntervalText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="5000" TickFrequency="50" Value="{Binding SentenceInterval}"
+                                                        AutomationProperties.Name="Pause between sentences" ToolTip="Pause before a waiting sentence starts appearing" />
+                                            </DockPanel>
+                                            <TextBlock Grid.Row="5" Text="New sentence" Style="{StaticResource ObsLabel}" />
+                                            <CheckBox Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" HorizontalAlignment="Left" Style="{StaticResource ChipToggle}"
+                                                      IsChecked="{Binding ReplacePrevious}" Content="Replaces the previous one" AutomationProperties.Name="Replace the previous sentence"
+                                                      ToolTip="The sentence on screen is cleared (with the clear animation) before the next one appears" />
+                                            <TextBlock Grid.Row="6" Text="Clear" Style="{StaticResource ObsLabel}" />
+                                            <ComboBox Grid.Row="6" Grid.Column="1" Margin="0,10,0,0" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding ClearAnimation}"
+                                                      ItemsSource="{Binding DataContext.Obs.ClearAnimations, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      AutomationProperties.Name="Clear animation" ToolTip="How the box clears: after the delay below, or when a sentence replaces another" />
+                                            <TextBlock Grid.Row="7" Text="Clear duration" Style="{StaticResource ObsLabel}" />
+                                            <DockPanel Grid.Row="7" Grid.Column="1">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding ClearDurationText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="2000" TickFrequency="50" Value="{Binding ClearDuration}"
+                                                        AutomationProperties.Name="Clear duration" />
+                                            </DockPanel>
+                                            <TextBlock Grid.Row="8" Text="Clear delay" Style="{StaticResource ObsLabel}" />
+                                            <DockPanel Grid.Row="8" Grid.Column="1">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding HideAfterText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="60" TickFrequency="1" Value="{Binding HideAfter}"
+                                                        AutomationProperties.Name="Clear delay" ToolTip="How long after the last sentence the box clears (0 = stays). Same as Hide after." />
+                                            </DockPanel>
+                                            <Button Grid.Row="9" Grid.Column="1" HorizontalAlignment="Left" Margin="0,12,0,0" Style="{StaticResource TintedButton}" FontSize="12" Padding="12,5"
+                                                    Command="{Binding DataContext.Obs.PlayDemoCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    AutomationProperties.Name="Play the animation in the preview">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE768;" FontFamily="{StaticResource IconFont}" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBlock Text="Play in preview" />
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+                                    </Expander>
+
+                                    <!-- Sounds -->
+                                    <Expander Style="{StaticResource ObsSectionExpander}" Header="Sounds">
+                                        <StackPanel>
+                                            <TextBlock TextWrapping="Wrap" FontFamily="{StaticResource SmallFont}" FontSize="11" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,4"
+                                                       Text="Played by OBS: in the Browser Source's properties, tick &quot;Control audio via OBS&quot; to hear them on stream. The preview stays silent except for the play buttons." />
+                                            <ItemsControl ItemsSource="{Binding Sounds}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:SoundViewModel}">
+                                                        <Grid Margin="0,10,0,0">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="104" />
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="Auto" />
+                                                                <RowDefinition Height="Auto" />
+                                                                <RowDefinition Height="Auto" />
+                                                            </Grid.RowDefinitions>
+                                                            <TextBlock Text="{Binding Title}" FontSize="13" VerticalAlignment="Center" ToolTip="{Binding Hint}" />
+                                                            <ComboBox Grid.Column="1" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Kind}"
+                                                                      ItemsSource="{Binding DataContext.Obs.SoundKinds, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                      AutomationProperties.Name="{Binding Title}" ToolTip="{Binding Hint}" />
+                                                            <Button Grid.Column="2" Style="{StaticResource GhostButton}" Margin="6,0,-6,0" IsEnabled="{Binding HasSound}"
+                                                                    Command="{Binding DataContext.Obs.PlaySoundCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding}" AutomationProperties.Name="Play this sound" ToolTip="Play it">
+                                                                <TextBlock Text="&#xE768;" FontFamily="{StaticResource IconFont}" FontSize="12" />
+                                                            </Button>
+                                                            <DockPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0"
+                                                                       Visibility="{Binding IsFile, Converter={StaticResource Visibility}}">
+                                                                <Button DockPanel.Dock="Left" Style="{StaticResource TintedButton}" FontSize="12" Padding="12,4" Content="Choose…"
+                                                                        Command="{Binding DataContext.Obs.ChooseSoundCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding}" AutomationProperties.Name="Choose a sound file" />
+                                                                <TextBlock Text="{Binding FileText}" FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{DynamicResource MutedBrush}" />
+                                                            </DockPanel>
+                                                            <DockPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" IsEnabled="{Binding HasSound}">
+                                                                <TextBlock DockPanel.Dock="Right" Text="{Binding VolumeText}" Width="44" Style="{StaticResource ObsValue}" />
+                                                                <TextBlock DockPanel.Dock="Left" Text="&#xE767;" FontFamily="{StaticResource IconFont}" FontSize="12"
+                                                                           VerticalAlignment="Center" Margin="0,10,8,0" Foreground="{DynamicResource MutedBrush}" />
+                                                                <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="1" TickFrequency="0.05" Value="{Binding Volume}"
+                                                                        AutomationProperties.Name="Volume" />
+                                                            </DockPanel>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Expander>
+
                                     <!-- Background -->
                                     <Expander Style="{StaticResource ObsSectionExpander}" Header="Background">
                                         <Grid>
