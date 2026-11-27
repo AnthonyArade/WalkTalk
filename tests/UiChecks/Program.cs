@@ -49,6 +49,36 @@ public static class Program
         if (args.Length > 3 && args[3] is "obs" or "picker")
             File.WriteAllText(StateStore.FilePath, "{ \"ObsPort\": 7491 }");
         File.Delete(PersonalModel.CandidatePath);
+        // The stream check: a stand-in for Twitch's API that says live or offline, a made-up sign-in, and an
+        // OBS text template switched on (on its own port).
+        var streamCheck = args.Length > 3 && args[3] == "stream";
+        var streamLive = false;
+        var streamAsks = 0;
+        if (streamCheck)
+        {
+            File.WriteAllText(StateStore.FilePath, "{ \"ObsPort\": 7492, \"ObsCanvases\": [ { \"Id\": \"s1\", \"IsOn\": true } ] }");
+            TwitchTokenStore.Save(new TwitchSession("access", "refresh", DateTime.UtcNow.AddHours(4), "4242", "tester"));
+            TwitchApi.ApiBase = "http://127.0.0.1:9131/helix";
+            var fake = new HttpListener();
+            fake.Prefixes.Add("http://127.0.0.1:9131/helix/");
+            fake.Start();
+            _ = Task.Run(async () =>
+            {
+                while (fake.IsListening)
+                {
+                    var context = await fake.GetContextAsync();
+                    streamAsks++;
+                    var ok = context.Request.Url!.AbsolutePath == "/helix/streams" && context.Request.QueryString["user_id"] == "4242" &&
+                             context.Request.Headers["Authorization"] == "Bearer access";
+                    var body = System.Text.Encoding.UTF8.GetBytes(!ok ? "{\"message\":\"wrong request\"}"
+                        : streamLive ? "{\"data\":[{\"id\":\"1\",\"user_id\":\"4242\",\"type\":\"live\"}]}" : "{\"data\":[]}");
+                    context.Response.StatusCode = ok ? 200 : 400;
+                    context.Response.ContentType = "application/json";
+                    await context.Response.OutputStream.WriteAsync(body);
+                    context.Response.Close();
+                }
+            });
+        }
         Directory.CreateDirectory(args[2]);
         var learn = args.Length > 3 && args[3] == "learn";
         Console.WriteLine($"voice model in the sandbox: {PersonalModel.Exists}, info: {PersonalModel.Info is not null}, files known: {PersonalModel.Info?.Files?.Count}");
@@ -66,6 +96,44 @@ public static class Program
             try
             {
                 string Shot(string name) { Capture(window, Path.Combine(args[2], name)); return name; }
+                if (streamCheck)
+                {
+                    var tw = vm.Twitch;
+                    Console.WriteLine($"twitch: {tw.State}, obs on {tw.ObsOn}, option {tw.StopOnStreamEnd}, watches {tw.WatchesStream}");
+                    tw.StopOnStreamEnd = true;
+                    Console.WriteLine($"option on -> watches {tw.WatchesStream} | {tw.StreamEndHint}");
+                    await Task.Delay(500);
+                    Shot("s1-twitch-on.png");
+
+                    // As if listening: the stream check runs on its own (the microphone and model aren't needed here).
+                    var listening = typeof(MainViewModel).GetProperty(nameof(MainViewModel.IsListening))!;
+                    var check = typeof(MainViewModel).GetMethod("CheckStreamAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+                    listening.SetValue(vm, true);
+                    typeof(MainViewModel).GetProperty(nameof(MainViewModel.StatusText))!.SetValue(vm, "listening");
+                    foreach (var (live, label) in new[] { (false, "not live yet"), (true, "live"), (false, "offline 1"), (true, "back live"), (false, "offline 1"), (false, "offline 2") })
+                    {
+                        streamLive = live;
+                        await (Task)check.Invoke(vm, null)!;
+                        Console.WriteLine($"stream {label,-12} -> status \"{vm.StatusText}\"");
+                    }
+                    Console.WriteLine($"Twitch was asked {streamAsks} times");
+
+                    typeof(MainViewModel).GetProperty(nameof(MainViewModel.StatusText))!.SetValue(vm, "listening");
+                    var asked = streamAsks;
+                    vm.Obs.Canvases[0].IsOn = false;
+                    Console.WriteLine($"OBS off -> obs on {tw.ObsOn}, watches {tw.WatchesStream}, switch shows {tw.StreamSwitch}, choice kept {tw.StopOnStreamEnd} | {tw.StreamEndHint}");
+                    streamLive = false;
+                    await (Task)check.Invoke(vm, null)!;
+                    Console.WriteLine($"check with OBS off: Twitch asked {streamAsks - asked} more times, status \"{vm.StatusText}\"");
+                    await Task.Delay(400);
+                    Shot("s2-twitch-obs-off.png");
+                    vm.Obs.Canvases[0].IsOn = true;
+                    Console.WriteLine($"OBS back on -> switch shows {tw.StreamSwitch}, watches {tw.WatchesStream}");
+                    listening.SetValue(vm, false);
+                    window.Closed += (_, _) => app.Shutdown();
+                    window.Close();
+                    return;
+                }
                 if (args.Length > 3 && args[3] == "picker")
                 {
                     // ---- the color picker: the swatch shows the color; the picker follows the color; dragging works

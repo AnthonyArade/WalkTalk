@@ -537,6 +537,29 @@
                                 </Grid>
                             </DockPanel>
 
+                            <!-- Connected: stop listening when the user's own stream ends (needs the OBS overlay on) -->
+                            <DockPanel Margin="5,10,2,0" Visibility="{Binding State, Converter={StaticResource VisibleWhen}, ConverterParameter=Connected}"
+                                       ToolTip="While you listen, WalkTalk asks Twitch every minute whether your stream is live. Once it has ended, listening stops. Needs an OBS text template switched on.">
+                                <CheckBox DockPanel.Dock="Right" Margin="8,0,2,0" VerticalAlignment="Center"
+                                          IsChecked="{Binding StreamSwitch}" IsEnabled="{Binding ObsOn}"
+                                          AutomationProperties.Name="Stop listening when my stream ends">
+                                    <CheckBox.Style>
+                                        <Style TargetType="CheckBox" BasedOn="{StaticResource SwitchStyle}">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="Opacity" Value="0.4" />
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </CheckBox.Style>
+                                </CheckBox>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="I'm streaming" FontSize="12" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding StreamEndHint}" FontFamily="{StaticResource SmallFont}" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource MutedBrush}" />
+                                </StackPanel>
+                            </DockPanel>
+
                             <DockPanel Margin="5,8,0,0">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
                                             Visibility="{Binding State, Converter={StaticResource VisibleWhen}, ConverterParameter=Connected}">

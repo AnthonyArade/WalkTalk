@@ -29,7 +29,7 @@ public sealed class TwitchViewModel : ObservableObject
     private string _verificationUri = "";
 
     private TwitchState _state;
-    private bool _isOn;
+    private bool _isOn, _stopOnStreamEnd, _obsOn;
     private string _channel, _userCode = "", _statusText = "Ready";
     private TargetStatus _status;
 
@@ -39,6 +39,7 @@ public sealed class TwitchViewModel : ObservableObject
         _post = post;
         _channel = state.TwitchChannel;
         _isOn = state.TwitchOn;
+        _stopOnStreamEnd = state.TwitchStopOnStreamEnd;
         _session = TwitchTokenStore.Load();
         _state = _session is null ? TwitchState.Disconnected : TwitchState.Connected;
 
@@ -65,6 +66,7 @@ public sealed class TwitchViewModel : ObservableObject
             OnPropertyChanged(nameof(Detail));
             OnPropertyChanged(nameof(IsActive));
             OnPropertyChanged(nameof(ChannelHint));
+            OnPropertyChanged(nameof(WatchesStream));
             CommandManager.InvalidateRequerySuggested();
         }
     }
@@ -92,6 +94,80 @@ public sealed class TwitchViewModel : ObservableObject
         {
             if (SetProperty(ref _channel, value.Trim().TrimStart('#', '@')))
                 _changed();
+        }
+    }
+
+    // "I'm streaming": stop listening when the user's own stream ends. It only makes sense with the OBS
+    // overlay, so it can be switched on only while an OBS text template is on.
+    public bool StopOnStreamEnd
+    {
+        get => _stopOnStreamEnd;
+        set
+        {
+            if (!SetProperty(ref _stopOnStreamEnd, value))
+                return;
+            OnPropertyChanged(nameof(WatchesStream));
+            OnPropertyChanged(nameof(StreamSwitch));
+            _changed();
+        }
+    }
+
+    // What the switch shows: off while OBS is off, even though the choice is kept for when it comes back on.
+    public bool StreamSwitch
+    {
+        get => StopOnStreamEnd && ObsOn;
+        set
+        {
+            if (ObsOn)
+                StopOnStreamEnd = value;
+        }
+    }
+
+    // Told by the main window whenever an OBS text template is switched on or off.
+    public bool ObsOn
+    {
+        get => _obsOn;
+        set
+        {
+            if (!SetProperty(ref _obsOn, value))
+                return;
+            OnPropertyChanged(nameof(StreamEndHint));
+            OnPropertyChanged(nameof(WatchesStream));
+            OnPropertyChanged(nameof(StreamSwitch));
+        }
+    }
+
+    // True when the stream's end should stop listening: the option is on, OBS is on, and an account is connected.
+    public bool WatchesStream => StopOnStreamEnd && ObsOn && State == TwitchState.Connected;
+
+    public string StreamEndHint => ObsOn
+        ? "When your Twitch stream ends, listening stops by itself."
+        : "Turn on an OBS text template first.";
+
+    // Whether the signed-in user's own channel is live: null when Twitch couldn't be asked.
+    public async Task<bool?> IsLiveAsync()
+    {
+        try
+        {
+            const string clientId = TwitchApi.BuiltInClientId;
+            var session = _session;
+            if (session is null)
+                return null;
+            if (session.ExpiresAt < DateTime.UtcNow.AddMinutes(1))
+                session = await RenewAsync(clientId, session);
+            try
+            {
+                return await TwitchApi.IsLiveAsync(clientId, session, session.UserId);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                session = await RenewAsync(clientId, session);
+                return await TwitchApi.IsLiveAsync(clientId, session, session.UserId);
+            }
+        }
+        catch (Exception ex) when (ex is TwitchException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
+        {
+            return null;
         }
     }
 
@@ -127,6 +203,7 @@ public sealed class TwitchViewModel : ObservableObject
     {
         state.TwitchChannel = Channel;
         state.TwitchOn = IsOn;
+        state.TwitchStopOnStreamEnd = StopOnStreamEnd;
     }
 
     private async Task ConnectAsync()

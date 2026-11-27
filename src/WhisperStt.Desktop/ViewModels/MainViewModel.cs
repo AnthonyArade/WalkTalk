@@ -31,6 +31,10 @@ public sealed class MainViewModel : ObservableObject
     private readonly DispatcherTimer _undoTimer = new() { Interval = TimeSpan.FromSeconds(8) };
     private (TargetViewModel Target, int Index)? _removed;
     private string _undoText = "";
+    // "Stop when my stream ends": while listening, Twitch is asked every minute whether the stream is live.
+    private readonly DispatcherTimer _streamTimer = new() { Interval = TimeSpan.FromSeconds(60) };
+    private bool _streamSeenLive, _checkingStream;
+    private int _streamOfflineChecks;
 
     private string? _selectedMicrophone;
     private string _selectedModel;
@@ -66,6 +70,13 @@ public sealed class MainViewModel : ObservableObject
         VrChat = new VrChatViewModel(state.VrChat, SaveState);
         Twitch = new TwitchViewModel(state, SaveState, Post);
         Obs = new ObsViewModel(state, SaveState);
+        Twitch.ObsOn = Obs.AnyOn;
+        Obs.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ObsViewModel.AnyOn))
+                Twitch.ObsOn = Obs.AnyOn;
+        };
+        _streamTimer.Tick += async (_, _) => await CheckStreamAsync();
         Replacements = new ReplacementsViewModel(state.Replacements, () => SelectedModel, SaveState);
         ReadAloud = new ReadAloudViewModel(state, SaveState, Post);
         ReadAloud.ReadingChanged += OnReadingAloudChanged;
@@ -359,6 +370,10 @@ public sealed class MainViewModel : ObservableObject
             transcriber.StartMicrophone(deviceNumber);
             _transcriber = transcriber;
             IsListening = true;
+            _streamSeenLive = false;
+            _streamOfflineChecks = 0;
+            _streamTimer.Start();
+            _ = CheckStreamAsync();
             StatusText = $"Listening on {SelectedMicrophone} · model {SelectedModel} on the {_engine.Backend} · {SelectedLanguage.Name}" +
                 (_engine.Backend == "CPU" ? " · no usable GPU found, so this will be slower" : "");
         }
@@ -372,12 +387,43 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    // Stops listening once the user's Twitch stream has ended. Listening may start before the stream does,
+    // so nothing happens until the stream has been seen live; and a stream that drops for a moment and comes
+    // back must not stop it, so it takes two "offline" answers in a row (a minute or two).
+    private async Task CheckStreamAsync()
+    {
+        if (!IsListening || !Twitch.WatchesStream || _checkingStream)
+            return;
+        _checkingStream = true;
+        try
+        {
+            var live = await Twitch.IsLiveAsync();
+            if (live is null || !IsListening || !Twitch.WatchesStream)
+                return;
+            if (live.Value)
+            {
+                _streamSeenLive = true;
+                _streamOfflineChecks = 0;
+                return;
+            }
+            if (!_streamSeenLive || ++_streamOfflineChecks < 2)
+                return;
+            await StopAsync();
+            StatusText = "Your Twitch stream ended, so listening stopped.";
+        }
+        finally
+        {
+            _checkingStream = false;
+        }
+    }
+
     private async Task StopAsync()
     {
         var transcriber = _transcriber;
         if (transcriber is null)
             return;
         _transcriber = null;
+        _streamTimer.Stop();
 
         StatusText = "Finishing the last sentence…";
         await transcriber.DisposeAsync();
@@ -413,6 +459,7 @@ public sealed class MainViewModel : ObservableObject
         _engine = null;
         ReadAloud.Dispose();
         VrChat.Dispose();
+        _streamTimer.Stop();
         Twitch.Shutdown();
         Obs.Dispose();
     }

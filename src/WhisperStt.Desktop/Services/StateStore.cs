@@ -36,6 +36,8 @@ public sealed class AppState
     // The built-in Twitch chat destination. The sign-in itself is kept apart, encrypted (TwitchTokenStore).
     public bool TwitchOn { get; set; }
     public string TwitchChannel { get; set; } = "";
+    // Stop listening when the user's own Twitch stream ends (only while an OBS text template is on).
+    public bool TwitchStopOnStreamEnd { get; set; }
     // The OBS overlay: its canvases and the port it is served on. (Obs and ObsOn hold the single canvas of
     // earlier versions; they are read once and turned into the first canvas.)
     public List<WhisperStt.Core.Obs.OverlayStyle> ObsCanvases { get; set; } = [];

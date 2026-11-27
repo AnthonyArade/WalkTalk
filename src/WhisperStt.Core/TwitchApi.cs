@@ -104,6 +104,16 @@ public static class TwitchApi
         return data[0].GetProperty("id").GetString()!;
     }
 
+    // Whether a channel is live right now. Needs no extra permission: any signed-in user can ask.
+    public static async Task<bool> IsLiveAsync(string clientId, TwitchSession session, string userId, CancellationToken ct = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiBase}/streams?user_id={Uri.EscapeDataString(userId)}&type=live");
+        using var response = await SendAsync(request, clientId, session, ct).ConfigureAwait(false);
+        var json = await ReadAsync(response, ct).ConfigureAwait(false);
+        Check(response, json);
+        return json.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array && data.GetArrayLength() > 0;
+    }
+
     public static async Task SendMessageAsync(string clientId, TwitchSession session, string channelId, string message, CancellationToken ct = default)
     {
         if (message.Length > MaxMessageLength)

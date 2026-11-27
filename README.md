@@ -9,7 +9,7 @@ WalkTalk can also learn your voice: read a set of sentences aloud and it retrain
 - **Live dictation.** Each sentence is written out as soon as you pause, into every field you switched on.
 - **Any app.** Click "Add field", then click a text box in any app. WalkTalk remembers it and writes there, optionally pressing Enter after each sentence.
 - **VRChat chatbox.** Sends each sentence to VRChat through OSC (127.0.0.1:9000), with the typing bubble while you speak.
-- **Twitch chat.** Connect your Twitch account (OAuth, in your browser) and each sentence is posted in the channel of your choice. The sign-in is stored encrypted for your Windows account only.
+- **Twitch chat.** Connect your Twitch account (OAuth, in your browser) and each sentence is posted in the channel of your choice. The sign-in is stored encrypted for your Windows account only. With an OBS text template on, "I'm streaming" stops listening by itself when your stream ends.
 - **Voice commands.** Say "Clean" to empty the fields, or "Send" / "Enter" to press Enter.
 - **Word hints.** Names and terms Whisper should spell exactly (usernames, games, jargon).
 - **Word replacements.** Search the words the model knows and write something else in their place: an abbreviation, slang, an emoji.
