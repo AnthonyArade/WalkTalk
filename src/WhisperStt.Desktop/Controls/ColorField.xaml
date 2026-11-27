@@ -31,9 +31,9 @@
             <Setter Property="Height" Value="28" />
             <Setter Property="Padding" Value="6,0" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="Foreground" Value="#5CE0A8" />
-            <Setter Property="Background" Value="#1E2A2A" />
-            <Setter Property="BorderBrush" Value="#2E4A44" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentHoverBrush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Template">
                 <Setter.Value>
