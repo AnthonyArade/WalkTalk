@@ -141,12 +141,6 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
     public ObservableCollection<string> Families { get; } = [];
     public ObservableCollection<FontResult> FontResults { get; } = [];
 
-    public IReadOnlyList<Choice<TextCase>> Cases { get; } =
-    [
-        new(TextCase.AsSaid, "As said"), new(TextCase.Uppercase, "UPPERCASE"),
-        new(TextCase.Lowercase, "lowercase"), new(TextCase.Capitalize, "Capitalize Each Word")
-    ];
-
     public IReadOnlyList<Choice<int>> Weights { get; } =
     [
         new(100, "100 · Thin"), new(200, "200 · Extra light"), new(300, "300 · Light"), new(400, "400 · Regular"),

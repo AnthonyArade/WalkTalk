@@ -76,6 +76,13 @@
             <Setter Property="StrokeEndLineCap" Value="Round" />
             <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
         </Style>
+        <Style x:Key="SegmentText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="LineHeight" Value="16" />
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+        </Style>
         <Style x:Key="SegmentRow" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource CardBrush}" />
             <Setter Property="CornerRadius" Value="8" />
@@ -1989,9 +1996,27 @@
                                             <controls:ColorField Grid.Row="4" Grid.Column="1" Margin="0,10,0,0" Color="{Binding TextColor}" AutomationProperties.Name="Text color" />
 
                                             <TextBlock Grid.Row="5" Text="Letters" Style="{StaticResource ObsLabel}" />
-                                            <ComboBox Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" DisplayMemberPath="Label" SelectedValuePath="Value"
-                                                      ItemsSource="{Binding DataContext.Obs.Cases, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                      SelectedValue="{Binding Case}" AutomationProperties.Name="Letter case" />
+                                            <!-- Letter case, shown as in design tools: as said, AG, ag, Ag -->
+                                            <Border Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" Style="{StaticResource SegmentRow}">
+                                                <UniformGrid Rows="1" AutomationProperties.Name="Letter case">
+                                                    <RadioButton Style="{StaticResource SegmentButton}" ToolTip="As said" AutomationProperties.Name="Letters as said"
+                                                                 IsChecked="{Binding Case, Converter={StaticResource EnumIs}, ConverterParameter=AsSaid}">
+                                                        <TextBlock Style="{StaticResource SegmentText}" Text="—" />
+                                                    </RadioButton>
+                                                    <RadioButton Style="{StaticResource SegmentButton}" ToolTip="UPPERCASE" AutomationProperties.Name="Uppercase"
+                                                                 IsChecked="{Binding Case, Converter={StaticResource EnumIs}, ConverterParameter=Uppercase}">
+                                                        <TextBlock Style="{StaticResource SegmentText}" Text="AG" />
+                                                    </RadioButton>
+                                                    <RadioButton Style="{StaticResource SegmentButton}" ToolTip="lowercase" AutomationProperties.Name="Lowercase"
+                                                                 IsChecked="{Binding Case, Converter={StaticResource EnumIs}, ConverterParameter=Lowercase}">
+                                                        <TextBlock Style="{StaticResource SegmentText}" Text="ag" />
+                                                    </RadioButton>
+                                                    <RadioButton Style="{StaticResource SegmentButton}" ToolTip="Capitalize Each Word" AutomationProperties.Name="Capitalize each word"
+                                                                 IsChecked="{Binding Case, Converter={StaticResource EnumIs}, ConverterParameter=Capitalize}">
+                                                        <TextBlock Style="{StaticResource SegmentText}" Text="Ag" />
+                                                    </RadioButton>
+                                                </UniformGrid>
+                                            </Border>
 
                                             <TextBlock Grid.Row="6" Text="Align" Style="{StaticResource ObsLabel}" />
                                             <Grid Grid.Row="6" Grid.Column="1" Margin="0,10,0,0">

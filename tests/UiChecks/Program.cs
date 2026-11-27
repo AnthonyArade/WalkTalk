@@ -214,6 +214,14 @@ public static class Program
                     canvas1.HorizontalAlign = WhisperStt.Core.Obs.HorizontalAlign.Center;
                     Console.WriteLine($"align: set from code -> center checked {AlignButton("Align center")?.IsChecked}, right checked {alignRight?.IsChecked}, top checked {alignTop?.IsChecked}");
                     canvas1.VerticalAlign = WhisperStt.Core.Obs.VerticalAlign.Bottom;
+                    var caseBefore = canvas1.Case;
+                    var lower = AlignButton("Lowercase");
+                    Console.WriteLine($"case: before {caseBefore}, uppercase checked {AlignButton("Uppercase")?.IsChecked}");
+                    if (lower is not null) lower.IsChecked = true;
+                    await Task.Delay(300);
+                    Console.WriteLine($"case: after click {canvas1.Case}, uppercase checked {AlignButton("Uppercase")?.IsChecked}");
+                    Shot("o1c-case.png");
+                    canvas1.Case = caseBefore;
 
                     // second canvas: a plain one with a picture background, from the + tile
                     obs.BackCommand.Execute(null);
