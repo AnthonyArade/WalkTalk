@@ -28,7 +28,13 @@
 <script>
   const id = location.pathname.split('/').filter(Boolean).pop();
   const preview = new URLSearchParams(location.search).has('preview');
-  const sample = ['This is how your transcript', 'will look in OBS.'];
+  // Sample sentences for the preview while nothing has been said: long enough to show how lines wrap at the
+  // edge of the box. Each is a sentence of its own, as real ones are.
+  const samples = [
+    'Welcome to the stream! This is how your transcript will look in OBS.',
+    'Every sentence appears here as soon as you say it, and long ones wrap onto the next line.',
+    'Hello chat!', 'Thanks for watching.', 'See you next time.', 'Bye!'
+  ];
   const canvas = document.getElementById('canvas');
   const box = document.getElementById('box');
   const place = { top: 'flex-start', middle: 'center', bottom: 'flex-end', left: 'flex-start', center: 'center', right: 'flex-end' };
@@ -67,7 +73,7 @@
   }
 
   function render() {
-    const shown = lines.length ? lines : (preview ? sample : []);
+    const shown = lines.length ? lines : (preview ? samples.slice(0, style ? style.lines : 2) : []);
     box.replaceChildren(...shown.map(text => {
       const div = document.createElement('div');
       div.className = 'line';
