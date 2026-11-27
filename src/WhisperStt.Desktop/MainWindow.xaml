@@ -815,7 +815,7 @@
                                     ToolTip="Write an abbreviation or slang in place of a word or phrase you say">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE8AB;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,1,6,0" />
-                                    <TextBlock Text="Replacements" />
+                                    <TextBlock Text="Word replacements" />
                                     <TextBlock Text="{Binding Replacements.Summary}" />
                                 </StackPanel>
                             </Button>
