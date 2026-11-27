@@ -54,6 +54,7 @@ public static class Program
         var streamCheck = args.Length > 3 && args[3] == "stream";
         var streamLive = false;
         var streamAsks = 0;
+        var streamBroken = false;
         if (streamCheck)
         {
             File.WriteAllText(StateStore.FilePath, "{ \"ObsPort\": 7492, \"ObsCanvases\": [ { \"Id\": \"s1\", \"IsOn\": true } ] }");
@@ -72,7 +73,8 @@ public static class Program
                              context.Request.Headers["Authorization"] == "Bearer access";
                     var body = System.Text.Encoding.UTF8.GetBytes(!ok ? "{\"message\":\"wrong request\"}"
                         : streamLive ? "{\"data\":[{\"id\":\"1\",\"user_id\":\"4242\",\"type\":\"live\"}]}" : "{\"data\":[]}");
-                    context.Response.StatusCode = ok ? 200 : 400;
+                    if (streamBroken) { ok = false; body = System.Text.Encoding.UTF8.GetBytes("{\"message\":\"server error\"}"); }
+                    context.Response.StatusCode = streamBroken ? 500 : ok ? 200 : 400;
                     context.Response.ContentType = "application/json";
                     await context.Response.OutputStream.WriteAsync(body);
                     context.Response.Close();
@@ -114,9 +116,16 @@ public static class Program
                     {
                         streamLive = live;
                         await (Task)check.Invoke(vm, null)!;
-                        Console.WriteLine($"stream {label,-12} -> status \"{vm.StatusText}\"");
+                        Console.WriteLine($"stream {label,-12} -> status \"{vm.StatusText}\" | card \"{tw.StreamStatus}\"");
                     }
                     Console.WriteLine($"Twitch was asked {streamAsks} times");
+                    listening.SetValue(vm, true);
+                    streamBroken = true;
+                    await (Task)check.Invoke(vm, null)!;
+                    Console.WriteLine($"Twitch answers an error -> card \"{tw.StreamStatus}\"");
+                    streamBroken = false;
+                    await Task.Delay(300);
+                    Shot("s1b-twitch-status.png");
 
                     typeof(MainViewModel).GetProperty(nameof(MainViewModel.StatusText))!.SetValue(vm, "listening");
                     var asked = streamAsks;

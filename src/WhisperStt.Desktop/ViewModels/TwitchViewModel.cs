@@ -144,30 +144,45 @@ public sealed class TwitchViewModel : ObservableObject
         ? "When your Twitch stream ends, listening stops by itself."
         : "Turn on an OBS text template first.";
 
-    // Whether the signed-in user's own channel is live: null when Twitch couldn't be asked.
-    public async Task<bool?> IsLiveAsync()
+    // What the last stream check found, shown under the switch while listening ("" when not checking).
+    public string StreamStatus
+    {
+        get => _streamStatus;
+        set => SetProperty(ref _streamStatus, value);
+    }
+    private string _streamStatus = "";
+
+    // Whether the signed-in user's own channel is live. Live is null when Twitch couldn't be asked, and
+    // Problem then says why.
+    public async Task<(bool? Live, string Problem)> IsLiveAsync()
     {
         try
         {
             const string clientId = TwitchApi.BuiltInClientId;
             var session = _session;
             if (session is null)
-                return null;
+                return (null, "not connected to Twitch");
             if (session.ExpiresAt < DateTime.UtcNow.AddMinutes(1))
                 session = await RenewAsync(clientId, session);
             try
             {
-                return await TwitchApi.IsLiveAsync(clientId, session, session.UserId);
+                return (await TwitchApi.IsLiveAsync(clientId, session, session.UserId), "");
             }
             catch (UnauthorizedAccessException)
             {
                 session = await RenewAsync(clientId, session);
-                return await TwitchApi.IsLiveAsync(clientId, session, session.UserId);
+                return (await TwitchApi.IsLiveAsync(clientId, session, session.UserId), "");
             }
         }
-        catch (Exception ex) when (ex is TwitchException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
+        catch (Exception ex)
         {
-            return null;
+            return (null, ex switch
+            {
+                TwitchException => ex.Message,
+                UnauthorizedAccessException => "Twitch rejected the sign-in. Disconnect and connect again.",
+                HttpRequestException or TaskCanceledException => "couldn't reach Twitch",
+                _ => ex.Message
+            });
         }
     }
 

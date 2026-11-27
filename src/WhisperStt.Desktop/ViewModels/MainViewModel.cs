@@ -31,8 +31,8 @@ public sealed class MainViewModel : ObservableObject
     private readonly DispatcherTimer _undoTimer = new() { Interval = TimeSpan.FromSeconds(8) };
     private (TargetViewModel Target, int Index)? _removed;
     private string _undoText = "";
-    // "Stop when my stream ends": while listening, Twitch is asked every minute whether the stream is live.
-    private readonly DispatcherTimer _streamTimer = new() { Interval = TimeSpan.FromSeconds(60) };
+    // "Stop when my stream ends": while listening, Twitch is asked every 30 seconds whether the stream is live.
+    private readonly DispatcherTimer _streamTimer = new() { Interval = TimeSpan.FromSeconds(30) };
     private bool _streamSeenLive, _checkingStream;
     private int _streamOfflineChecks;
 
@@ -77,6 +77,12 @@ public sealed class MainViewModel : ObservableObject
                 Twitch.ObsOn = Obs.AnyOn;
         };
         _streamTimer.Tick += async (_, _) => await CheckStreamAsync();
+        // Switching the option (or OBS) on while listening checks right away instead of at the next tick.
+        Twitch.PropertyChanged += async (_, e) =>
+        {
+            if (e.PropertyName == nameof(TwitchViewModel.WatchesStream))
+                await CheckStreamAsync();
+        };
         Replacements = new ReplacementsViewModel(state.Replacements, () => SelectedModel, SaveState);
         ReadAloud = new ReadAloudViewModel(state, SaveState, Post);
         ReadAloud.ReadingChanged += OnReadingAloudChanged;
@@ -389,25 +395,51 @@ public sealed class MainViewModel : ObservableObject
 
     // Stops listening once the user's Twitch stream has ended. Listening may start before the stream does,
     // so nothing happens until the stream has been seen live; and a stream that drops for a moment and comes
-    // back must not stop it, so it takes two "offline" answers in a row (a minute or two).
+    // back must not stop it, so it takes two "offline" answers in a row. What each check found is shown in
+    // the Twitch card.
     private async Task CheckStreamAsync()
     {
-        if (!IsListening || !Twitch.WatchesStream || _checkingStream)
+        if (!IsListening || !Twitch.WatchesStream)
+        {
+            Twitch.StreamStatus = "";
+            return;
+        }
+        if (_checkingStream)
             return;
         _checkingStream = true;
         try
         {
-            var live = await Twitch.IsLiveAsync();
-            if (live is null || !IsListening || !Twitch.WatchesStream)
+            if (Twitch.StreamStatus.Length == 0)
+                Twitch.StreamStatus = "Checking your stream…";
+            var (live, problem) = await Twitch.IsLiveAsync();
+            if (!IsListening || !Twitch.WatchesStream)
+            {
+                Twitch.StreamStatus = "";
                 return;
+            }
+            var time = DateTime.Now.ToString("HH:mm:ss");
+            if (live is null)
+            {
+                Twitch.StreamStatus = $"Couldn't check your stream ({problem}) · {time}";
+                return;
+            }
             if (live.Value)
             {
                 _streamSeenLive = true;
                 _streamOfflineChecks = 0;
+                Twitch.StreamStatus = $"Your stream is live · checked {time}";
                 return;
             }
-            if (!_streamSeenLive || ++_streamOfflineChecks < 2)
+            if (!_streamSeenLive)
+            {
+                Twitch.StreamStatus = $"Your stream isn't live yet · checked {time}";
                 return;
+            }
+            if (++_streamOfflineChecks < 2)
+            {
+                Twitch.StreamStatus = $"Your stream looks offline · checking again to be sure · {time}";
+                return;
+            }
             await StopAsync();
             StatusText = "Your Twitch stream ended, so listening stopped.";
         }
@@ -424,6 +456,7 @@ public sealed class MainViewModel : ObservableObject
             return;
         _transcriber = null;
         _streamTimer.Stop();
+        Twitch.StreamStatus = "";
 
         StatusText = "Finishing the last sentence…";
         await transcriber.DisposeAsync();

@@ -539,7 +539,7 @@
 
                             <!-- Connected: stop listening when the user's own stream ends (needs the OBS overlay on) -->
                             <DockPanel Margin="5,10,2,0" Visibility="{Binding State, Converter={StaticResource VisibleWhen}, ConverterParameter=Connected}"
-                                       ToolTip="While you listen, WalkTalk asks Twitch every minute whether your stream is live. Once it has ended, listening stops. Needs an OBS text template switched on.">
+                                       ToolTip="While you listen, WalkTalk asks Twitch every 30 seconds whether your stream is live. Once it has ended (Twitch can take a minute or two to say so), listening stops. Needs an OBS text template switched on.">
                                 <CheckBox DockPanel.Dock="Right" Margin="8,0,2,0" VerticalAlignment="Center"
                                           IsChecked="{Binding StreamSwitch}" IsEnabled="{Binding ObsOn}"
                                           AutomationProperties.Name="Stop listening when my stream ends">
@@ -557,6 +557,10 @@
                                     <TextBlock Text="I'm streaming" FontSize="12" FontWeight="SemiBold" />
                                     <TextBlock Text="{Binding StreamEndHint}" FontFamily="{StaticResource SmallFont}" FontSize="11" TextWrapping="Wrap"
                                                Foreground="{DynamicResource MutedBrush}" />
+                                    <!-- What the last check found, while listening -->
+                                    <TextBlock Text="{Binding StreamStatus}" FontFamily="{StaticResource SmallFont}" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource AccentHoverBrush}" Margin="0,2,0,0"
+                                               Visibility="{Binding StreamStatus, Converter={StaticResource VisibleUnless}, ConverterParameter=''}" />
                                 </StackPanel>
                             </DockPanel>
 
