@@ -3,7 +3,7 @@
        and the installer all take it from here. Code signing (SignPath) checks that every signed file says
        "WalkTalk" and this same version. -->
   <PropertyGroup>
-    <Version>1.0.1.0</Version>
+    <Version>1.0.2.0</Version>
     <Product>WalkTalk</Product>
     <Company>WalkTalk</Company>
     <Copyright>Copyright (c) 2026 AnthonyArade</Copyright>
