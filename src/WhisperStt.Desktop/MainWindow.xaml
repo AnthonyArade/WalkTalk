@@ -2226,8 +2226,8 @@
                                             <TextBlock Text="Size" Style="{StaticResource ObsLabel}" Margin="0" />
                                             <DockPanel Grid.Column="1">
                                                 <TextBlock DockPanel.Dock="Right" Text="{Binding BorderWidthText}" Width="60" Style="{StaticResource ObsValue}" Margin="0" />
-                                                <Slider Style="{StaticResource ObsSlider}" Margin="0,0,8,0" Minimum="1" Maximum="30" TickFrequency="1" Value="{Binding BorderWidth}"
-                                                        AutomationProperties.Name="Border size" />
+                                                <Slider Style="{StaticResource ObsSlider}" Margin="0,0,8,0" Minimum="0" Maximum="30" TickFrequency="1" Value="{Binding BorderWidth}"
+                                                        AutomationProperties.Name="Border size" ToolTip="0 = no line, only the rounded corners" />
                                             </DockPanel>
                                             <TextBlock Grid.Row="1" Text="Color" Style="{StaticResource ObsLabel}" />
                                             <controls:ColorField Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" Color="{Binding BorderColor}" AutomationProperties.Name="Border color" />
@@ -2235,7 +2235,7 @@
                                             <DockPanel Grid.Row="2" Grid.Column="1">
                                                 <TextBlock DockPanel.Dock="Right" Text="{Binding BorderRadiusText}" Width="60" Style="{StaticResource ObsValue}" />
                                                 <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="100" TickFrequency="1" Value="{Binding BorderRadius}"
-                                                        AutomationProperties.Name="Corner roundness" ToolTip="Rounds the box's corners, background included" />
+                                                        AutomationProperties.Name="Corner roundness" ToolTip="Rounds the box's corners, background included. With the border off, the corners stay square." />
                                             </DockPanel>
                                         </Grid>
                                     </Expander>

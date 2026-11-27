@@ -184,7 +184,8 @@ public sealed class OverlayStyle
             _ => "transparent"
         },
         border = Border && BorderWidth > 0 ? $"{N(Math.Clamp(BorderWidth, 0, 100))}px solid {Css(BorderColor, "#FFFFFF")}" : "none",
-        borderRadius = Math.Clamp(BorderRadius, 0, 1000),
+        // The corners belong to the border: with it off, the box keeps square corners.
+        borderRadius = Border ? Math.Clamp(BorderRadius, 0, 1000) : 0,
 
         animate = Animate,
         revealUnit = RevealUnit.ToString().ToLowerInvariant(),
