@@ -203,7 +203,8 @@ public sealed class MainViewModel : ObservableObject
     // The list as Whisper receives it; a change takes effect the next time listening starts.
     public string WordHints => string.Join(", ", WordHintList);
 
-    public string HintsSummary => WordHintList.Count switch { 0 => "None", 1 => "1 word", var n => $"{n} words" };
+    // Shown after "Word hints" on its button, like the replacements: " (3)", nothing when there are none.
+    public string HintsSummary => WordHintList.Count switch { 0 => "", var n => $" ({n})" };
 
     public bool IsHintsOpen
     {

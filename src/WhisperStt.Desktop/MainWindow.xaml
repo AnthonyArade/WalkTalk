@@ -301,18 +301,6 @@
                     <ComboBox Width="130" ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}"
                               DisplayMemberPath="Name" IsEnabled="{Binding CanChangeSettings}" />
                 </StackPanel>
-                <StackPanel Margin="0,0,12,0">
-                    <TextBlock Text="Word hints" Style="{StaticResource LabelText}" />
-                    <Button Style="{StaticResource SecondaryButton}" MinWidth="110" Command="{Binding OpenHintsCommand}"
-                            AutomationProperties.Name="Word hints"
-                            ToolTip="Names and words Whisper should spell correctly">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE8D2;" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource ChromeButtonIconBrush}" Margin="0,0,8,0" />
-                            <TextBlock Text="{Binding HintsSummary}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
                 <StackPanel Margin="0,0,18,0">
                     <TextBlock Text="TTS" Style="{StaticResource LabelText}" />
                     <Button Style="{StaticResource SecondaryButton}" MinWidth="100" Command="{Binding ReadAloud.OpenCommand}"
@@ -808,6 +796,15 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE720;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,1,6,0" />
                                     <TextBlock Text="Voice training" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource GhostButton}" Command="{Binding OpenHintsCommand}"
+                                    AutomationProperties.Name="Word hints"
+                                    ToolTip="Names and words Whisper should spell correctly">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8D2;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,1,6,0" />
+                                    <TextBlock Text="Word hints" />
+                                    <TextBlock Text="{Binding HintsSummary}" />
                                 </StackPanel>
                             </Button>
                             <Button Style="{StaticResource GhostButton}" Command="{Binding Replacements.OpenCommand}"
