@@ -153,12 +153,6 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         new(500, "500 · Medium"), new(600, "600 · Semibold"), new(700, "700 · Bold"), new(800, "800 · Extra bold"), new(900, "900 · Black")
     ];
 
-    public IReadOnlyList<Choice<HorizontalAlign>> HorizontalAligns { get; } =
-        [new(HorizontalAlign.Left, "Left"), new(HorizontalAlign.Center, "Center"), new(HorizontalAlign.Right, "Right")];
-
-    public IReadOnlyList<Choice<VerticalAlign>> VerticalAligns { get; } =
-        [new(VerticalAlign.Top, "Top"), new(VerticalAlign.Middle, "Middle"), new(VerticalAlign.Bottom, "Bottom")];
-
     public IReadOnlyList<Choice<BackgroundType>> BackgroundTypes { get; } =
         [new(BackgroundType.None, "None (transparent)"), new(BackgroundType.Color, "Color"), new(BackgroundType.Gradient, "Gradient"), new(BackgroundType.Image, "Picture")];
 

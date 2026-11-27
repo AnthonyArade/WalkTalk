@@ -188,6 +188,33 @@ public static class Program
                     await Task.Delay(1500);
                     Shot("o1-editor.png");
 
+                    // alignment: icon buttons instead of lists
+                    System.Windows.Controls.RadioButton? AlignButton(string name)
+                    {
+                        var stack = new Stack<DependencyObject>([window]);
+                        while (stack.Count > 0)
+                        {
+                            var node = stack.Pop();
+                            if (node is System.Windows.Controls.RadioButton rb && System.Windows.Automation.AutomationProperties.GetName(rb) == name)
+                                return rb;
+                            for (int c = 0; c < System.Windows.Media.VisualTreeHelper.GetChildrenCount(node); c++)
+                                stack.Push(System.Windows.Media.VisualTreeHelper.GetChild(node, c));
+                        }
+                        return null;
+                    }
+                    var alignRight = AlignButton("Align right");
+                    var alignTop = AlignButton("Align top");
+                    Console.WriteLine($"align: before {canvas1.HorizontalAlign}/{canvas1.VerticalAlign}, center checked {AlignButton("Align center")?.IsChecked}, bottom checked {AlignButton("Align bottom")?.IsChecked}");
+                    alignRight?.BringIntoView();
+                    if (alignRight is not null) alignRight.IsChecked = true;
+                    if (alignTop is not null) alignTop.IsChecked = true;
+                    await Task.Delay(400);
+                    Console.WriteLine($"align: after clicks {canvas1.HorizontalAlign}/{canvas1.VerticalAlign}, center checked {AlignButton("Align center")?.IsChecked}");
+                    Shot("o1b-align.png");
+                    canvas1.HorizontalAlign = WhisperStt.Core.Obs.HorizontalAlign.Center;
+                    Console.WriteLine($"align: set from code -> center checked {AlignButton("Align center")?.IsChecked}, right checked {alignRight?.IsChecked}, top checked {alignTop?.IsChecked}");
+                    canvas1.VerticalAlign = WhisperStt.Core.Obs.VerticalAlign.Bottom;
+
                     // second canvas: a plain one with a picture background, from the + tile
                     obs.BackCommand.Execute(null);
                     obs.AddCommand.Execute(null);

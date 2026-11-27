@@ -39,6 +39,48 @@
             <Setter Property="Margin" Value="0,10,8,0" />
             <Setter Property="IsSnapToTickEnabled" Value="True" />
         </Style>
+        <!-- One button of a segmented row (alignment): an icon drawn in the button's Foreground. -->
+        <local:EnumIsConverter x:Key="EnumIs" />
+        <Style x:Key="SegmentButton" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Root" CornerRadius="6" Background="Transparent" Padding="0,6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource CardHoverBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource AccentTintBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}" />
+                                <Setter TargetName="Root" Property="BorderThickness" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SegmentIcon" TargetType="Path">
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+            <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+        </Style>
+        <Style x:Key="SegmentRow" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="3" />
+        </Style>
         <Style x:Key="ObsSection" TargetType="TextBlock">
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -1958,12 +2000,49 @@
                                                     <ColumnDefinition Width="8" />
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
-                                                <ComboBox DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding HorizontalAlign}"
-                                                          ItemsSource="{Binding DataContext.Obs.HorizontalAligns, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                          AutomationProperties.Name="Horizontal alignment" ToolTip="Horizontal" />
-                                                <ComboBox Grid.Column="2" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding VerticalAlign}"
-                                                          ItemsSource="{Binding DataContext.Obs.VerticalAligns, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                          AutomationProperties.Name="Vertical alignment" ToolTip="Vertical" />
+                                                <!-- Horizontal: lines of text pushed left, centered or right -->
+                                                <Border Style="{StaticResource SegmentRow}">
+                                                    <UniformGrid Rows="1" AutomationProperties.Name="Horizontal alignment">
+                                                        <RadioButton Style="{StaticResource SegmentButton}" ToolTip="Left" AutomationProperties.Name="Align left"
+                                                                     IsChecked="{Binding HorizontalAlign, Converter={StaticResource EnumIs}, ConverterParameter=Left}">
+                                                            <Path Style="{StaticResource SegmentIcon}" Data="M2,3 H14 M2,6.5 H10 M2,10 H14 M2,13.5 H8" />
+                                                        </RadioButton>
+                                                        <RadioButton Style="{StaticResource SegmentButton}" ToolTip="Center" AutomationProperties.Name="Align center"
+                                                                     IsChecked="{Binding HorizontalAlign, Converter={StaticResource EnumIs}, ConverterParameter=Center}">
+                                                            <Path Style="{StaticResource SegmentIcon}" Data="M2,3 H14 M4,6.5 H12 M2,10 H14 M5,13.5 H11" />
+                                                        </RadioButton>
+                                                        <RadioButton Style="{StaticResource SegmentButton}" ToolTip="Right" AutomationProperties.Name="Align right"
+                                                                     IsChecked="{Binding HorizontalAlign, Converter={StaticResource EnumIs}, ConverterParameter=Right}">
+                                                            <Path Style="{StaticResource SegmentIcon}" Data="M2,3 H14 M6,6.5 H14 M2,10 H14 M8,13.5 H14" />
+                                                        </RadioButton>
+                                                    </UniformGrid>
+                                                </Border>
+                                                <!-- Vertical: two lines of text against the top, in the middle or at the bottom of a box -->
+                                                <Border Grid.Column="2" Style="{StaticResource SegmentRow}">
+                                                    <UniformGrid Rows="1" AutomationProperties.Name="Vertical alignment">
+                                                        <RadioButton Style="{StaticResource SegmentButton}" ToolTip="Top" AutomationProperties.Name="Align top"
+                                                                     IsChecked="{Binding VerticalAlign, Converter={StaticResource EnumIs}, ConverterParameter=Top}">
+                                                            <Grid>
+                                                                <Path Style="{StaticResource SegmentIcon}" Data="M2,1.5 H14 M2,14.5 H14" Opacity="0.4" />
+                                                                <Path Style="{StaticResource SegmentIcon}" Data="M4,4.5 H12 M5.5,7.5 H10.5" />
+                                                            </Grid>
+                                                        </RadioButton>
+                                                        <RadioButton Style="{StaticResource SegmentButton}" ToolTip="Middle" AutomationProperties.Name="Align middle"
+                                                                     IsChecked="{Binding VerticalAlign, Converter={StaticResource EnumIs}, ConverterParameter=Middle}">
+                                                            <Grid>
+                                                                <Path Style="{StaticResource SegmentIcon}" Data="M2,1.5 H14 M2,14.5 H14" Opacity="0.4" />
+                                                                <Path Style="{StaticResource SegmentIcon}" Data="M4,6.5 H12 M5.5,9.5 H10.5" />
+                                                            </Grid>
+                                                        </RadioButton>
+                                                        <RadioButton Style="{StaticResource SegmentButton}" ToolTip="Bottom" AutomationProperties.Name="Align bottom"
+                                                                     IsChecked="{Binding VerticalAlign, Converter={StaticResource EnumIs}, ConverterParameter=Bottom}">
+                                                            <Grid>
+                                                                <Path Style="{StaticResource SegmentIcon}" Data="M2,1.5 H14 M2,14.5 H14" Opacity="0.4" />
+                                                                <Path Style="{StaticResource SegmentIcon}" Data="M4,8.5 H12 M5.5,11.5 H10.5" />
+                                                            </Grid>
+                                                        </RadioButton>
+                                                    </UniformGrid>
+                                                </Border>
                                             </Grid>
 
                                             <TextBlock Grid.Row="7" Text="Line height" Style="{StaticResource ObsLabel}" />

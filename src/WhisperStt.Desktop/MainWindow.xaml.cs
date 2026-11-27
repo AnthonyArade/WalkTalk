@@ -253,6 +253,17 @@ public sealed class EqualsToVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
+// For a row of radio buttons bound to one enum: checked when the value's name is the parameter, and
+// checking a button sets the value to it.
+public sealed class EnumIsConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        string.Equals(value?.ToString(), parameter?.ToString(), StringComparison.Ordinal);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is true && parameter is string name ? Enum.Parse(targetType, name) : Binding.DoNothing;
+}
+
 // A color typed as "#RRGGBB" or "#AARRGGBB", for a swatch next to the box; transparent while it isn't one.
 public sealed class ColorTextToBrushConverter : IValueConverter
 {
