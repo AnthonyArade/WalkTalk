@@ -155,7 +155,7 @@ public sealed class OverlayServer : IDisposable
             else if (path == "/fonts.css")
                 Send(response, "text/css; charset=utf-8", Encoding.UTF8.GetBytes(GoogleFonts.Stylesheet()));
             else if (path.StartsWith("/fonts/", StringComparison.Ordinal) && GoogleFonts.FilePath(path["/fonts/".Length..]) is { } font)
-                Send(response, "font/woff2", File.ReadAllBytes(font));
+                Send(response, GoogleFonts.ContentType(font), File.ReadAllBytes(font));
             else if (path.StartsWith("/bg/", StringComparison.Ordinal) && ImageOf(path["/bg/".Length..]) is { } image)
                 Send(response, OverlayImages.ContentType(image), File.ReadAllBytes(image));
             else

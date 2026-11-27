@@ -2,7 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Name="Root">
-    <!-- A color: a swatch that opens red/green/blue/opacity sliders, and the color typed as #RRGGBB or #AARRGGBB -->
+    <!-- A color: a swatch that opens a picker (saturation/brightness field, hue bar, opacity bar, red/green/blue/opacity
+         boxes), and the color typed as #RRGGBB or #AARRGGBB -->
     <UserControl.Resources>
         <DrawingBrush x:Key="Checkers" TileMode="Tile" Viewport="0,0,10,10" ViewportUnits="Absolute">
             <DrawingBrush.Drawing>
@@ -12,16 +13,38 @@
                 </DrawingGroup>
             </DrawingBrush.Drawing>
         </DrawingBrush>
-        <Style x:Key="ChannelLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Margin" Value="0,8,0,0" />
+        <!-- The round handle on the field and the bars: white ring around the current color -->
+        <Style x:Key="Handle" TargetType="Ellipse">
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Stroke" Value="White" />
+            <Setter Property="StrokeThickness" Value="3" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect ShadowDepth="0" BlurRadius="4" Opacity="0.6" />
+                </Setter.Value>
+            </Setter>
         </Style>
-        <Style x:Key="ChannelValue" TargetType="TextBox">
+        <Style x:Key="ChannelBox" TargetType="TextBox">
             <Setter Property="FontSize" Value="12" />
-            <Setter Property="Margin" Value="8,8,0,0" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="6,0" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="HorizontalContentAlignment" Value="Right" />
+            <Setter Property="Foreground" Value="#5CE0A8" />
+            <Setter Property="Background" Value="#1E2A2A" />
+            <Setter Property="BorderBrush" Value="#2E4A44" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </UserControl.Resources>
     <DockPanel>
@@ -30,7 +53,7 @@
             <ToggleButton.Template>
                 <ControlTemplate TargetType="ToggleButton">
                     <Border CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource DialogStrokeBrush}" Background="{StaticResource Checkers}">
-                        <Border x:Name="Swatch" CornerRadius="5" Background="{Binding SwatchBrush, ElementName=Root}" />
+                        <Border CornerRadius="5" Background="{Binding SwatchBrush, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                     </Border>
                 </ControlTemplate>
             </ToggleButton.Template>
@@ -38,67 +61,86 @@
         <TextBox x:Name="HexBox" VerticalContentAlignment="Center" FontSize="12"
                  AutomationProperties.Name="{Binding (AutomationProperties.Name), ElementName=Root}"
                  ToolTip="#RRGGBB, or #AARRGGBB with the opacity first" />
-        <Popup x:Name="Picker" PlacementTarget="{Binding ElementName=SwatchButton}" Placement="Bottom" HorizontalOffset="-250"
+        <Popup x:Name="Picker" PlacementTarget="{Binding ElementName=SwatchButton}" Placement="Bottom" HorizontalOffset="-210"
                StaysOpen="False" AllowsTransparency="True" IsOpen="{Binding IsChecked, ElementName=SwatchButton}">
-            <Border Width="284" Margin="0,6,10,12" Padding="14,12" CornerRadius="10" Background="{DynamicResource DialogBrush}"
-                    BorderBrush="{DynamicResource DialogStrokeBrush}" BorderThickness="1" TextElement.Foreground="{DynamicResource TextBrush}">
+            <Border Width="244" Margin="0,6,10,12" Padding="10" CornerRadius="12" Background="#1A1B1E"
+                    BorderBrush="#33FFFFFF" BorderThickness="1">
                 <Border.Effect>
-                    <DropShadowEffect BlurRadius="20" ShadowDepth="6" Direction="270" Opacity="0.45" />
+                    <DropShadowEffect BlurRadius="20" ShadowDepth="6" Direction="270" Opacity="0.5" />
                 </Border.Effect>
                 <StackPanel>
-                    <Border Height="42" CornerRadius="8" Background="{StaticResource Checkers}" Margin="0,0,0,4">
-                        <Border CornerRadius="8" Background="{Binding SwatchBrush, ElementName=Root}" />
-                    </Border>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="58" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="52" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="Red" Style="{StaticResource ChannelLabel}" />
-                        <Slider x:Name="Red" Grid.Column="1" Style="{StaticResource BrandSlider}" Minimum="0" Maximum="255" SmallChange="1" LargeChange="16"
-                                IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,8,0,0" AutomationProperties.Name="Red" />
-                        <TextBox x:Name="RedBox" Grid.Column="2" Style="{StaticResource ChannelValue}" />
-                        <TextBlock Grid.Row="1" Text="Green" Style="{StaticResource ChannelLabel}" />
-                        <Slider x:Name="Green" Grid.Row="1" Grid.Column="1" Style="{StaticResource BrandSlider}" Minimum="0" Maximum="255" SmallChange="1" LargeChange="16"
-                                IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,8,0,0" AutomationProperties.Name="Green" />
-                        <TextBox x:Name="GreenBox" Grid.Row="1" Grid.Column="2" Style="{StaticResource ChannelValue}" />
-                        <TextBlock Grid.Row="2" Text="Blue" Style="{StaticResource ChannelLabel}" />
-                        <Slider x:Name="Blue" Grid.Row="2" Grid.Column="1" Style="{StaticResource BrandSlider}" Minimum="0" Maximum="255" SmallChange="1" LargeChange="16"
-                                IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,8,0,0" AutomationProperties.Name="Blue" />
-                        <TextBox x:Name="BlueBox" Grid.Row="2" Grid.Column="2" Style="{StaticResource ChannelValue}" />
-                        <TextBlock Grid.Row="3" Text="Opacity" Style="{StaticResource ChannelLabel}" />
-                        <Slider x:Name="Alpha" Grid.Row="3" Grid.Column="1" Style="{StaticResource BrandSlider}" Minimum="0" Maximum="255" SmallChange="1" LargeChange="16"
-                                IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,8,0,0" AutomationProperties.Name="Opacity" />
-                        <TextBox x:Name="AlphaBox" Grid.Row="3" Grid.Column="2" Style="{StaticResource ChannelValue}" ToolTip="0 is invisible, 255 is solid" />
+                    <!-- Saturation (left to right) and brightness (top to bottom) for the current hue -->
+                    <Grid x:Name="Field" Height="170" Cursor="Cross" Background="Transparent" ClipToBounds="False"
+                          MouseLeftButtonDown="Field_MouseDown" MouseMove="Field_MouseMove" MouseLeftButtonUp="Drag_MouseUp">
+                        <Border x:Name="HueLayer" CornerRadius="8" Background="Red" />
+                        <Border CornerRadius="8">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="White" Offset="0" />
+                                    <GradientStop Color="#00FFFFFF" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+                        <Border CornerRadius="8">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#00000000" Offset="0" />
+                                    <GradientStop Color="Black" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+                        <Canvas>
+                            <Ellipse x:Name="FieldHandle" Style="{StaticResource Handle}" Fill="{Binding SolidBrush, ElementName=Root}" />
+                        </Canvas>
                     </Grid>
-                    <ItemsControl x:Name="Presets" Margin="0,12,0,0">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <UniformGrid Columns="8" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Button Height="22" Margin="2" Cursor="Hand" Tag="{Binding}" Click="Preset_Click" ToolTip="{Binding}"
-                                        AutomationProperties.Name="{Binding}">
-                                    <Button.Template>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource DialogStrokeBrush}" Background="{StaticResource Checkers}">
-                                                <Border CornerRadius="3" Background="{Binding}" />
-                                            </Border>
-                                        </ControlTemplate>
-                                    </Button.Template>
-                                </Button>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+
+                    <!-- Hue -->
+                    <Grid x:Name="HueBar" Height="16" Margin="0,12,0,0" Cursor="Hand" Background="Transparent"
+                          MouseLeftButtonDown="Hue_MouseDown" MouseMove="Hue_MouseMove" MouseLeftButtonUp="Drag_MouseUp">
+                        <Border Height="8" CornerRadius="4" VerticalAlignment="Center">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#FF0000" Offset="0" />
+                                    <GradientStop Color="#FFFF00" Offset="0.1667" />
+                                    <GradientStop Color="#00FF00" Offset="0.3333" />
+                                    <GradientStop Color="#00FFFF" Offset="0.5" />
+                                    <GradientStop Color="#0000FF" Offset="0.6667" />
+                                    <GradientStop Color="#FF00FF" Offset="0.8333" />
+                                    <GradientStop Color="#FF0000" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+                        <Canvas>
+                            <Ellipse x:Name="HueHandle" Style="{StaticResource Handle}" Fill="{Binding Background, ElementName=HueLayer}" />
+                        </Canvas>
+                    </Grid>
+
+                    <!-- Opacity -->
+                    <Grid x:Name="AlphaBar" Height="16" Margin="0,8,0,0" Cursor="Hand" Background="Transparent"
+                          MouseLeftButtonDown="Alpha_MouseDown" MouseMove="Alpha_MouseMove" MouseLeftButtonUp="Drag_MouseUp">
+                        <Border Height="8" CornerRadius="4" VerticalAlignment="Center" Background="{StaticResource Checkers}" />
+                        <Border x:Name="AlphaLayer" Height="8" CornerRadius="4" VerticalAlignment="Center" />
+                        <Canvas>
+                            <Ellipse x:Name="AlphaHandle" Style="{StaticResource Handle}" Fill="{Binding SwatchBrush, ElementName=Root}" />
+                        </Canvas>
+                    </Grid>
+
+                    <!-- Red, green, blue (0 to 255) and opacity (0 to 1) -->
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="RedBox" Style="{StaticResource ChannelBox}" AutomationProperties.Name="Red" ToolTip="Red, 0 to 255" />
+                        <TextBox x:Name="GreenBox" Grid.Column="2" Style="{StaticResource ChannelBox}" AutomationProperties.Name="Green" ToolTip="Green, 0 to 255" />
+                        <TextBox x:Name="BlueBox" Grid.Column="4" Style="{StaticResource ChannelBox}" AutomationProperties.Name="Blue" ToolTip="Blue, 0 to 255" />
+                        <TextBox x:Name="AlphaBox" Grid.Column="6" Style="{StaticResource ChannelBox}" AutomationProperties.Name="Opacity" ToolTip="Opacity, 0 (invisible) to 1 (solid)" />
+                    </Grid>
                 </StackPanel>
             </Border>
         </Popup>

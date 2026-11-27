@@ -1879,6 +1879,17 @@
                                             <!-- Google Fonts -->
                                             <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" DataContext="{Binding DataContext.Obs, RelativeSource={RelativeSource AncestorType=Window}}">
                                                 <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Button Grid.Column="1" Style="{StaticResource GhostButton}" Margin="6,0,-6,0" Command="{Binding AddFontFileCommand}"
+                                                            AutomationProperties.Name="Add a font from a file" ToolTip="Add a font file you have (TTF, OTF, WOFF or WOFF2)">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="&#xE8E5;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,1,6,0" />
+                                                            <TextBlock Text="From file…" />
+                                                        </StackPanel>
+                                                    </Button>
                                                     <TextBox x:Name="FontSearchBox" Text="{Binding FontQuery, UpdateSourceTrigger=PropertyChanged}"
                                                              VerticalContentAlignment="Center" Padding="28,0,8,0" AutomationProperties.Name="Search Google Fonts">
                                                         <TextBox.InputBindings>

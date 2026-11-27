@@ -89,6 +89,7 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         ResetCommand = new RelayCommand(Reset, () => Editing is not null);
         FontActionCommand = new RelayCommand<FontResult>(result => _ = FontActionAsync(result));
         InstallTypedCommand = new RelayCommand(() => _ = InstallTypedAsync(), () => FontQuery.Trim().Length > 0);
+        AddFontFileCommand = new RelayCommand(AddFontFile);
         UpdateServer();
     }
 
@@ -104,6 +105,7 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
     public ICommand ResetCommand { get; }
     public ICommand FontActionCommand { get; }
     public ICommand InstallTypedCommand { get; }
+    public ICommand AddFontFileCommand { get; }
 
     // Where the preview's browser keeps its data. Settable so tests can keep it apart from the user's.
     public static string PreviewDataFolder { get; set; } = Path.Combine(
@@ -423,6 +425,60 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         result.IsInstalled = true;
         if (Editing is { } canvas)
             canvas.FontFamily = result.Family;
+    }
+
+    // A font from a file the user has (TTF, OTF, WOFF, WOFF2), kept for the overlay and used on this canvas.
+    private void AddFontFile()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Add a font",
+            Filter = "Fonts|*.ttf;*.otf;*.woff;*.woff2"
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+        AddFontFile(dialog.FileName);
+    }
+
+    // Separate from the dialog so it can be tested. Returns the family name, or null when it failed.
+    public string? AddFontFile(string path)
+    {
+        var family = FamilyNameOf(path);
+        try
+        {
+            GoogleFonts.InstallFile(family, path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            SearchStatus = $"Couldn't add that font: {ex.Message}";
+            return null;
+        }
+        RefreshFamilies();
+        _server?.FontsChanged();
+        if (Editing is { } canvas)
+            canvas.FontFamily = family;
+        SearchStatus = $"{family} is added.";
+        return family;
+    }
+
+    // The family name stored in a TTF or OTF file; for web fonts (or an unreadable file), the file's name.
+    private static string FamilyNameOf(string path)
+    {
+        var fallback = Path.GetFileNameWithoutExtension(path).Replace('_', ' ').Replace('-', ' ').Trim();
+        if (Path.GetExtension(path).ToLowerInvariant() is not (".ttf" or ".otf"))
+            return fallback;
+        try
+        {
+            var face = new GlyphTypeface(new Uri(path));
+            var names = face.Win32FamilyNames.Count > 0 ? face.Win32FamilyNames : face.FamilyNames;
+            return names.TryGetValue(System.Globalization.CultureInfo.GetCultureInfo("en-US"), out var english) ? english
+                : names.Values.FirstOrDefault() is { Length: > 0 } any ? any
+                : fallback;
+        }
+        catch (Exception ex) when (ex is IOException or FileFormatException or UriFormatException or NotSupportedException)
+        {
+            return fallback;
+        }
     }
 
     // For when the list can't be reached: installs the family typed in the search box.

@@ -114,6 +114,39 @@ public static partial class GoogleFonts
         System.IO.Directory.Move(temp, folder);
     }
 
+    public static readonly string[] FileExtensions = [".ttf", ".otf", ".woff", ".woff2"];
+
+    // Keeps a font file the user chose (one they bought or made) as a family for the overlay, like an
+    // installed Google font. A single file is used for every weight; a variable font covers them all.
+    public static void InstallFile(string family, string sourcePath)
+    {
+        var extension = Path.GetExtension(sourcePath).ToLowerInvariant();
+        if (!FileExtensions.Contains(extension))
+            throw new InvalidOperationException("Choose a TTF, OTF, WOFF or WOFF2 font file.");
+        var name = family.Trim().Replace("\"", "").Replace("\\", "");
+        if (name.Length == 0)
+            throw new InvalidOperationException("The font needs a name.");
+        var slug = Slug(name);
+        var folder = Path.Combine(Directory, slug);
+        if (System.IO.Directory.Exists(folder))
+            System.IO.Directory.Delete(folder, recursive: true);
+        System.IO.Directory.CreateDirectory(folder);
+        var file = "0" + extension;
+        File.Copy(sourcePath, Path.Combine(folder, file));
+        var format = extension switch { ".otf" => "opentype", ".woff" => "woff", ".woff2" => "woff2", _ => "truetype" };
+        File.WriteAllText(Path.Combine(folder, "font.css"),
+            $"@font-face {{ font-family: '{name.Replace("'", "\\'")}'; src: url(/fonts/{slug}/{file}) format('{format}'); font-weight: 100 900; font-display: swap; }}\n");
+        File.WriteAllText(Path.Combine(folder, "family.txt"), name);
+    }
+
+    public static string ContentType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".ttf" => "font/ttf",
+        ".otf" => "font/otf",
+        ".woff" => "font/woff",
+        _ => "font/woff2"
+    };
+
     public static void Uninstall(string family)
     {
         var folder = Path.Combine(Directory, Slug(family));
@@ -179,6 +212,6 @@ public static partial class GoogleFonts
     [GeneratedRegex(@"^[a-z0-9-]+$")]
     private static partial Regex SafeName();
 
-    [GeneratedRegex(@"^\d+\.woff2$")]
+    [GeneratedRegex(@"^\d+\.(woff2|woff|ttf|otf)$")]
     private static partial Regex FontFile();
 }

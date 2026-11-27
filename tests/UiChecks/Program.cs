@@ -46,7 +46,7 @@ public static class Program
         TwitchApi.ApiBase = "http://127.0.0.1:9/helix";
         File.Delete(StateStore.FilePath);
         // The OBS check runs on its own port, so a WalkTalk already serving the overlay on 7480 is left alone.
-        if (args.Length > 3 && args[3] == "obs")
+        if (args.Length > 3 && args[3] is "obs" or "picker")
             File.WriteAllText(StateStore.FilePath, "{ \"ObsPort\": 7491 }");
         File.Delete(PersonalModel.CandidatePath);
         Directory.CreateDirectory(args[2]);
@@ -66,6 +66,68 @@ public static class Program
             try
             {
                 string Shot(string name) { Capture(window, Path.Combine(args[2], name)); return name; }
+                if (args.Length > 3 && args[3] == "picker")
+                {
+                    // ---- the color picker: the swatch shows the color; the picker follows the color; dragging works
+                    var field = new WhisperStt.Desktop.Controls.ColorField { Width = 260, Color = "#CC9146FF" };
+                    var host = new Window
+                    {
+                        Content = new Border { Padding = new Thickness(16), Child = field, Background = (Brush)app.FindResource("DialogBrush") },
+                        SizeToContent = SizeToContent.WidthAndHeight, Left = -20000, Top = -20000, ShowActivated = false, ShowInTaskbar = false,
+                        WindowStartupLocation = WindowStartupLocation.Manual
+                    };
+                    host.Show();
+                    await Task.Delay(400);
+                    var swatch = (System.Windows.Controls.Primitives.ToggleButton)field.FindName("SwatchButton");
+                    swatch.IsChecked = true;
+                    await Task.Delay(500);
+                    var popup = (System.Windows.Controls.Primitives.Popup)field.FindName("Picker");
+                    void Render(Visual visual, double w, double h, string name)
+                    {
+                        var dpi = VisualTreeHelper.GetDpi(visual);
+                        var bmp = new RenderTargetBitmap((int)(w * dpi.DpiScaleX), (int)(h * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+                        bmp.Render(visual);
+                        var enc = new PngBitmapEncoder();
+                        enc.Frames.Add(BitmapFrame.Create(bmp));
+                        using var file = File.Create(Path.Combine(args[2], name));
+                        enc.Save(file);
+                    }
+                    var swatchColor = ((SolidColorBrush)field.SwatchBrush).Color;
+                    Console.WriteLine($"popup open {popup.IsOpen} | swatch brush {swatchColor} for {field.Color}");
+                    var child = (FrameworkElement)popup.Child;
+                    Render(host.Content as Visual ?? host, ((FrameworkElement)host.Content).ActualWidth, ((FrameworkElement)host.Content).ActualHeight, "p1-field.png");
+                    Render(child, child.ActualWidth, child.ActualHeight, "p2-picker.png");
+                    field.Color = "#FF0000";
+                    await Task.Delay(200);
+                    Console.WriteLine($"set red -> boxes {((TextBox)field.FindName("RedBox")).Text},{((TextBox)field.FindName("GreenBox")).Text},{((TextBox)field.FindName("BlueBox")).Text},{((TextBox)field.FindName("AlphaBox")).Text}");
+                    ((TextBox)field.FindName("AlphaBox")).Text = "0.5";
+                    await Task.Delay(200);
+                    Console.WriteLine($"opacity box 0.5 -> {field.Color}");
+                    field.Color = "#FFE45C";
+                    await Task.Delay(300);
+                    Render(child, child.ActualWidth, child.ActualHeight, "p3-picker-yellow.png");
+                    Render(host.Content as Visual ?? host, ((FrameworkElement)host.Content).ActualWidth, ((FrameworkElement)host.Content).ActualHeight, "p4-field-yellow.png");
+
+                    // ---- a font from a file
+                    var obsVm = vm.Obs;
+                    obsVm.OpenCommand.Execute(null);
+                    obsVm.AddCommand.Execute(null);
+                    var source = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "comic.ttf");
+                    var family = obsVm.AddFontFile(source);
+                    Console.WriteLine($"font file {Path.GetFileName(source)} -> family \"{family}\", canvas font \"{obsVm.Editing?.FontFamily}\", first in list: {obsVm.Families.FirstOrDefault()} | {obsVm.SearchStatus}");
+                    using var http = new System.Net.Http.HttpClient();
+                    var css = await http.GetStringAsync($"http://127.0.0.1:{obsVm.PortText}/fonts.css");
+                    var cssLine = css.Split('\n').FirstOrDefault(l => l.Contains(family ?? "?")) ?? "(missing)";
+                    Console.WriteLine($"fonts.css: {cssLine.Trim()}");
+                    var url = System.Text.RegularExpressions.Regex.Match(cssLine, @"url\(([^)]+)\)").Groups[1].Value;
+                    var served = await http.GetAsync($"http://127.0.0.1:{obsVm.PortText}{url}");
+                    Console.WriteLine($"font file served: {served.StatusCode} {served.Content.Headers.ContentType} {served.Content.Headers.ContentLength} bytes");
+                    host.Close();
+                    obsVm.IsOpen = false;
+                    window.Closed += (_, _) => app.Shutdown();
+                    window.Close();
+                    return;
+                }
                 if (args.Length > 3 && args[3] == "obs")
                 {
                     // ---- the OBS overlay: two canvases, styled differently; fonts, picture, port; what each page gets
