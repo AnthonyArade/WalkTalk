@@ -124,7 +124,7 @@ public sealed class CanvasViewModel : ObservableObject
 
     // -- the settings
 
-    public string Name { get => Style.Name; set => Set(Style.Name, string.IsNullOrWhiteSpace(value) ? "Canvas" : value.Trim(), v => Style.Name = v); }
+    public string Name { get => Style.Name; set => Set(Style.Name, string.IsNullOrWhiteSpace(value) ? "Text template" : value.Trim(), v => Style.Name = v); }
     public bool IsOn { get => Style.IsOn; set => Set(Style.IsOn, value, v => Style.IsOn = v); }
 
     public int CanvasWidth { get => Style.Width; set => Set(Style.Width, Math.Clamp(value, 50, 7680), v => Style.Width = v); }

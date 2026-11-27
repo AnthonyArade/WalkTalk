@@ -228,9 +228,9 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
 
     private void Add()
     {
-        var name = $"Canvas {Canvases.Count + 1}";
+        var name = $"Text template {Canvases.Count + 1}";
         for (int n = Canvases.Count + 2; Canvases.Any(c => c.Name == name); n++)
-            name = $"Canvas {n}";
+            name = $"Text template {n}";
         var canvas = Wrap(new OverlayStyle { Name = name });
         Canvases.Add(canvas);
         _server?.SetCanvas(canvas.Style);
@@ -251,7 +251,7 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         }
     }
 
-    public string DeleteText => ConfirmDelete ? "Click again to delete" : "Delete canvas";
+    public string DeleteText => ConfirmDelete ? "Click again to delete" : "Delete text template";
 
     private void Delete()
     {

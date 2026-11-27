@@ -1656,14 +1656,14 @@
                         </DockPanel>
                         <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,4,0,16" FontFamily="{StaticResource SmallFont}" FontSize="12"
                                    Foreground="{DynamicResource MutedBrush}"
-                                   Text="Each canvas is a page OBS shows as a Browser Source, with its own size and look. Every sentence appears on the canvases that are switched on. Click a canvas to change it, or + to add one." />
+                                   Text="Each text template is a page OBS shows as a Browser Source, with its own size and look. Every sentence appears on the text templates that are switched on. Click one to change it, or + to add one." />
 
                         <DockPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
                             <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Done" MinWidth="96"
                                     Command="{Binding DataContext.CloseDialogsCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                             <TextBlock DockPanel.Dock="Left" Text="Port" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" />
                             <TextBox DockPanel.Dock="Left" Width="72" Text="{Binding PortText, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
-                                     AutomationProperties.Name="Port" ToolTip="The port the canvases are served on (1024 to 65535)">
+                                     AutomationProperties.Name="Port" ToolTip="The port the text templates are served on (1024 to 65535)">
                                 <TextBox.InputBindings>
                                     <KeyBinding Key="Enter" Command="{Binding ApplyPortCommand}" />
                                 </TextBox.InputBindings>
@@ -1687,7 +1687,7 @@
                                             <Grid Width="200" Height="214" Margin="0,0,14,14">
                                                 <Button Style="{StaticResource CanvasTile}"
                                                         Command="{Binding DataContext.Obs.EditCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}" AutomationProperties.Name="{Binding Name}" ToolTip="Change this canvas">
+                                                        CommandParameter="{Binding}" AutomationProperties.Name="{Binding Name}" ToolTip="Change this text template">
                                                     <DockPanel>
                                                         <StackPanel DockPanel.Dock="Bottom" Margin="12,8,12,10">
                                                             <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
@@ -1717,18 +1717,18 @@
                                                     </DockPanel>
                                                 </Button>
                                                 <CheckBox Style="{StaticResource SwitchStyle}" IsChecked="{Binding IsOn}" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                                          Margin="0,14,14,0" AutomationProperties.Name="Canvas on" ToolTip="Show sentences on this canvas" />
+                                                          Margin="0,14,14,0" AutomationProperties.Name="Text template on" ToolTip="Show sentences on this text template" />
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 <!-- Add a canvas -->
                                 <Button Style="{StaticResource CanvasTile}" Width="200" Height="214" Margin="0,0,14,14" Command="{Binding AddCommand}"
-                                        AutomationProperties.Name="Add a canvas" ToolTip="Add a canvas">
+                                        AutomationProperties.Name="Add a text template" ToolTip="Add a text template">
                                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="34" HorizontalAlignment="Center"
                                                    Foreground="{DynamicResource AccentHoverBrush}" />
-                                        <TextBlock Text="Add a canvas" FontSize="13" Margin="0,10,0,0" HorizontalAlignment="Center" Foreground="{DynamicResource MutedBrush}" />
+                                        <TextBlock Text="Add a text template" FontSize="13" Margin="0,10,0,0" HorizontalAlignment="Center" Foreground="{DynamicResource MutedBrush}" />
                                     </StackPanel>
                                 </Button>
                             </WrapPanel>
@@ -1740,25 +1740,25 @@
                         <DockPanel DockPanel.Dock="Top" DataContext="{Binding Editing}">
                             <Button DockPanel.Dock="Left" Style="{StaticResource GhostButton}" Margin="-8,0,8,0" VerticalAlignment="Center"
                                     Command="{Binding DataContext.Obs.BackCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    AutomationProperties.Name="All canvases" ToolTip="Back to all canvases">
+                                    AutomationProperties.Name="All text templates" ToolTip="Back to all text templates">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE72B;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center" Margin="0,1,6,0" />
-                                    <TextBlock Text="All canvases" />
+                                    <TextBlock Text="All text templates" />
                                 </StackPanel>
                             </Button>
                             <CheckBox DockPanel.Dock="Right" Style="{StaticResource SwitchStyle}" IsChecked="{Binding IsOn}" VerticalAlignment="Center"
-                                      AutomationProperties.Name="Canvas on" ToolTip="Show sentences on this canvas" />
+                                      AutomationProperties.Name="Text template on" ToolTip="Show sentences on this text template" />
                             <TextBlock DockPanel.Dock="Right" Text="Show sentences" FontSize="13" VerticalAlignment="Center" Margin="12,0,10,0"
                                        Foreground="{DynamicResource MutedBrush}" />
                             <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" Style="{StaticResource NameTextBox}" FontSize="18" FontWeight="SemiBold"
-                                     VerticalAlignment="Center" KeyDown="NameBox_KeyDown" AutomationProperties.Name="Canvas name" />
+                                     VerticalAlignment="Center" KeyDown="NameBox_KeyDown" AutomationProperties.Name="Text template name" />
                         </DockPanel>
 
                         <DockPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
                             <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Done" MinWidth="96"
                                     Command="{Binding BackCommand}" />
                             <Button DockPanel.Dock="Left" Style="{StaticResource GhostButton}" Content="{Binding DeleteText}" Command="{Binding DeleteCommand}"
-                                    Foreground="{DynamicResource DangerHoverBrush}" AutomationProperties.Name="Delete canvas" />
+                                    Foreground="{DynamicResource DangerHoverBrush}" AutomationProperties.Name="Delete text template" />
                             <Button DockPanel.Dock="Left" Style="{StaticResource GhostButton}" Content="Reset style" Command="{Binding ResetCommand}" Margin="4,0,0,0"
                                     ToolTip="Back to the default look (the name, size, switch and address stay)" />
                             <TextBlock Text="{Binding Status}" FontFamily="{StaticResource SmallFont}" FontSize="11" TextWrapping="Wrap"
@@ -1785,8 +1785,8 @@
                                         </DockPanel>
                                     </Expander>
 
-                                    <!-- Canvas -->
-                                    <Expander Style="{StaticResource ObsSectionExpander}" Header="Canvas" IsExpanded="True">
+                                    <!-- Size and how many sentences stay -->
+                                    <Expander Style="{StaticResource ObsSectionExpander}" Header="Size" IsExpanded="True">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="104" />
@@ -1797,25 +1797,18 @@
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
-                                                <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
                                             <TextBlock Text="Size (px)" Style="{StaticResource ObsLabel}" Margin="0" />
                                             <TextBox Grid.Column="1" Text="{Binding CanvasWidth}" KeyDown="NameBox_KeyDown" VerticalContentAlignment="Center"
-                                                     AutomationProperties.Name="Canvas width" ToolTip="Width" />
+                                                     AutomationProperties.Name="Width" ToolTip="Width" />
                                             <TextBlock Grid.Column="2" Text="×" HorizontalAlignment="Center" Style="{StaticResource ObsLabel}" Margin="0" />
                                             <TextBox Grid.Column="3" Text="{Binding CanvasHeight}" KeyDown="NameBox_KeyDown" VerticalContentAlignment="Center"
-                                                     AutomationProperties.Name="Canvas height" ToolTip="Height" />
+                                                     AutomationProperties.Name="Height" ToolTip="Height" />
                                             <TextBlock Grid.Row="1" Text="Sentences" Style="{StaticResource ObsLabel}" />
                                             <DockPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3">
                                                 <TextBlock DockPanel.Dock="Right" Text="{Binding LinesText}" Width="80" Style="{StaticResource ObsValue}" />
                                                 <Slider Style="{StaticResource ObsSlider}" Minimum="1" Maximum="6" TickFrequency="1" Value="{Binding Lines}"
                                                         AutomationProperties.Name="Sentences on screen" ToolTip="How many of the latest sentences stay on screen" />
-                                            </DockPanel>
-                                            <TextBlock Grid.Row="2" Text="Hide after" Style="{StaticResource ObsLabel}" />
-                                            <DockPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3">
-                                                <TextBlock DockPanel.Dock="Right" Text="{Binding HideAfterText}" Width="80" Style="{StaticResource ObsValue}" />
-                                                <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="60" TickFrequency="1" Value="{Binding HideAfter}"
-                                                        AutomationProperties.Name="Hide after" ToolTip="The text fades out this long after the last sentence (0 = stays)" />
                                             </DockPanel>
                                         </Grid>
                                     </Expander>
@@ -1834,7 +1827,7 @@
                                                 <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
                                             <TextBlock Grid.ColumnSpan="2" TextWrapping="Wrap" FontFamily="{StaticResource SmallFont}" FontSize="11" Foreground="{DynamicResource MutedBrush}"
-                                                       Text="The box holds the text and carries the background and border. It fills the canvas, or shrinks to the text and sits where the text is aligned." />
+                                                       Text="The box holds the text and carries the background and border. It fills the whole area (the size above), or shrinks to the text and sits where the text is aligned." />
                                             <TextBlock Grid.Row="1" Text="Auto size" Style="{StaticResource ObsLabel}" />
                                             <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,10,0,0">
                                                 <CheckBox Style="{StaticResource ChipToggle}" IsChecked="{Binding AutoWidth}" Content="Auto width" AutomationProperties.Name="Auto width"
@@ -2103,7 +2096,7 @@
                                             <DockPanel Grid.Row="8" Grid.Column="1">
                                                 <TextBlock DockPanel.Dock="Right" Text="{Binding HideAfterText}" Width="60" Style="{StaticResource ObsValue}" />
                                                 <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="60" TickFrequency="1" Value="{Binding HideAfter}"
-                                                        AutomationProperties.Name="Clear delay" ToolTip="How long after the last sentence the box clears (0 = stays). Same as Hide after." />
+                                                        AutomationProperties.Name="Clear delay" ToolTip="How long after the last sentence the box clears (0 = it stays). Works with or without the text animation." />
                                             </DockPanel>
                                             <Button Grid.Row="9" Grid.Column="1" HorizontalAlignment="Left" Margin="0,12,0,0" Style="{StaticResource TintedButton}" FontSize="12" Padding="12,5"
                                                     Command="{Binding DataContext.Obs.PlayDemoCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -2254,7 +2247,7 @@
                                 <TextBlock DockPanel.Dock="Top" Text="Preview" Style="{StaticResource ObsSection}" Margin="0,0,0,8" />
                                 <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" FontFamily="{StaticResource SmallFont}" FontSize="11"
                                            Foreground="{DynamicResource MutedBrush}" Margin="0,10,0,0"
-                                           Text="In OBS: Sources, +, Browser. Paste the address, set Width and Height to the canvas size, and keep &quot;Shutdown source when not visible&quot; off. A Google font must be installed here to show in OBS." />
+                                           Text="In OBS: Sources, +, Browser. Paste the address, set Width and Height to the size above, and keep &quot;Shutdown source when not visible&quot; off. A Google font must be installed here to show in OBS." />
                                 <Border CornerRadius="10" Background="#2C2C2C" ClipToBounds="True">
                                     <Grid>
                                         <wv2:WebView2 x:Name="ObsPreview" DefaultBackgroundColor="Transparent" />

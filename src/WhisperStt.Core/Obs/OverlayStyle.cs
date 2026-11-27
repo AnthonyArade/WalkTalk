@@ -31,7 +31,7 @@ public sealed class OverlaySound
 public sealed class OverlayStyle
 {
     public string Id { get; set; } = NewId();
-    public string Name { get; set; } = "Canvas";
+    public string Name { get; set; } = "Text template";
     public bool IsOn { get; set; } = true;
 
     // -- canvas
@@ -130,6 +130,9 @@ public sealed class OverlayStyle
         }
         if (string.IsNullOrWhiteSpace(Id))
             Id = NewId();
+        // These were called canvases at first: the names WalkTalk gave them follow the new name.
+        if (Name == "Canvas" || (Name.StartsWith("Canvas ", StringComparison.Ordinal) && int.TryParse(Name[7..], out _)))
+            Name = "Text template" + Name[6..];
         TypingSound ??= new();
         SentenceSound ??= new();
         ShowSound ??= new();
