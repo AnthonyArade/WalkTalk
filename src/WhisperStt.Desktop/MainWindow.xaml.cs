@@ -42,11 +42,70 @@ public partial class MainWindow : Window
         };
         _viewModel.Replacements.Picked += () => Dispatcher.BeginInvoke(() => ReplacementCustomBox.Focus(), DispatcherPriority.Input);
         // The canvas editor's preview shows that canvas's overlay page itself, loaded when a canvas is opened.
-        _viewModel.Obs.PropertyChanged += (_, e) =>
+        // While it is on screen, a picture of it is taken for the canvas's tile: once the page has loaded, and
+        // again shortly after each change (a hidden preview can't be photographed, so not on leaving).
+        _snapshotTimer.Tick += async (_, _) =>
         {
-            if (e.PropertyName == nameof(ObsViewModel.Editing) && _viewModel.Obs.Editing is not null)
-                _ = ShowObsPreviewAsync();
+            _snapshotTimer.Stop();
+            if (_previewed is { } canvas && ObsPreview.IsVisible)
+                await SnapshotCanvasAsync(canvas);
         };
+        _viewModel.Obs.PropertyChanged += async (_, e) =>
+        {
+            if (e.PropertyName != nameof(ObsViewModel.Editing))
+                return;
+            if (_previewed is not null)
+                _previewed.PropertyChanged -= OnPreviewedCanvasChanged;
+            _snapshotTimer.Stop();
+            _previewed = _viewModel.Obs.Editing;
+            if (_previewed is null)
+                return;
+            _previewed.PropertyChanged += OnPreviewedCanvasChanged;
+            await ShowObsPreviewAsync();
+        };
+    }
+
+    // The canvas the preview is showing, and the wait before photographing it after a change.
+    private CanvasViewModel? _previewed;
+    private readonly DispatcherTimer _snapshotTimer = new() { Interval = TimeSpan.FromMilliseconds(900) };
+
+    private void OnPreviewedCanvasChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(CanvasViewModel.Thumbnail) or nameof(CanvasViewModel.HasThumbnail))
+            return;
+        _snapshotTimer.Stop();
+        _snapshotTimer.Start();
+    }
+
+    // Saves a picture of the canvas exactly as the preview draws it (the real page: fonts, outline, shadow,
+    // background) and puts it on the canvas's tile.
+    private async Task SnapshotCanvasAsync(CanvasViewModel canvas)
+    {
+        var web = ObsPreview.CoreWebView2;
+        if (web is null || !_viewModel.Obs.Canvases.Contains(canvas))
+            return; // no preview yet, or the canvas was just deleted
+        try
+        {
+            // Where the canvas sits in the preview (it is scaled to fit and centered).
+            var json = await web.ExecuteScriptAsync(
+                "JSON.stringify((r => ({ x: r.left, y: r.top, w: r.width, h: r.height }))(document.getElementById('canvas').getBoundingClientRect()))");
+            using var rect = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Deserialize<string>(json) ?? "{}");
+            double Get(string name) => rect.RootElement.TryGetProperty(name, out var v) ? v.GetDouble() : 0;
+            if (Get("w") < 2 || Get("h") < 2)
+                return;
+            var clip = new { x = Get("x"), y = Get("y"), width = Get("w"), height = Get("h"), scale = 1 };
+            var shot = await web.CallDevToolsProtocolMethodAsync("Page.captureScreenshot",
+                System.Text.Json.JsonSerializer.Serialize(new { format = "png", clip, captureBeyondViewport = false }));
+            using var result = System.Text.Json.JsonDocument.Parse(shot);
+            var png = Convert.FromBase64String(result.RootElement.GetProperty("data").GetString() ?? "");
+            WhisperStt.Core.Obs.OverlayImages.SaveThumbnail(canvas.Id, png);
+            canvas.LoadThumbnail();
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException
+                                       or System.Text.Json.JsonException or FormatException or System.IO.IOException or UnauthorizedAccessException)
+        {
+            // The tile keeps its previous picture.
+        }
     }
 
     private async Task ShowObsPreviewAsync()
@@ -69,6 +128,12 @@ public partial class MainWindow : Window
                 await ObsPreview.EnsureCoreWebView2Async(environment);
                 ObsPreview.CoreWebView2!.Settings.AreDefaultContextMenusEnabled = false;
                 ObsPreview.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                // A freshly loaded preview (fonts included, given a moment) is photographed for the tile.
+                ObsPreview.CoreWebView2.NavigationCompleted += (_, _) =>
+                {
+                    _snapshotTimer.Stop();
+                    _snapshotTimer.Start();
+                };
             }
             ObsPreview.CoreWebView2!.Navigate(canvas.PreviewUrl);
             ObsPreviewMessage.Visibility = Visibility.Collapsed;

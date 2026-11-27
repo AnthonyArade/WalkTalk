@@ -29,6 +29,17 @@ public static class OverlayImages
             File.Delete(Path.Combine(Directory, canvasId + extension));
     }
 
+    // A picture of how a canvas looks, taken from its preview, for its tile in the canvas list.
+    public static string ThumbnailPath(string canvasId) => Path.Combine(Directory, canvasId + ".thumb.png");
+
+    public static void SaveThumbnail(string canvasId, byte[] png)
+    {
+        System.IO.Directory.CreateDirectory(Directory);
+        File.WriteAllBytes(ThumbnailPath(canvasId), png);
+    }
+
+    public static void RemoveThumbnail(string canvasId) => File.Delete(ThumbnailPath(canvasId));
+
     public static string? PathOf(string name)
     {
         if (name.Length == 0 || name.Contains('/') || name.Contains('\\') || name.Contains(".."))

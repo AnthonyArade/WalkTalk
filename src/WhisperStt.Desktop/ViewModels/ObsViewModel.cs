@@ -240,6 +240,7 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         Canvases.Remove(canvas);
         _server?.RemoveCanvas(canvas.Id);
         OverlayImages.Remove(canvas.Id);
+        OverlayImages.RemoveThumbnail(canvas.Id);
         Editing = null;
         OnPropertyChanged(nameof(AnyOn));
         UpdateServer();

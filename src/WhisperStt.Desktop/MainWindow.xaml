@@ -1693,17 +1693,26 @@
                                                             <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                                             <TextBlock Text="{Binding SizeText}" FontFamily="{StaticResource SmallFont}" FontSize="11" Foreground="{DynamicResource MutedBrush}" />
                                                         </StackPanel>
-                                                        <!-- A small picture of the canvas: its shape, background, border and text color -->
-                                                        <Border Margin="8,8,8,0" CornerRadius="8" Background="{StaticResource TileCheckers}" ClipToBounds="True">
-                                                            <Border Width="{Binding TileWidth}" Height="{Binding TileHeight}" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                                    Background="{Binding BackgroundBrush}" BorderBrush="{Binding BorderBrush}" BorderThickness="1.5" CornerRadius="3">
-                                                                <TextBlock Text="Hello chat!" FontFamily="{Binding FontFamily}" FontSize="15" Margin="6,3"
-                                                                           Foreground="{Binding TextBrush}" HorizontalAlignment="{Binding TileAlign}" VerticalAlignment="{Binding TileVerticalAlign}">
-                                                                    <TextBlock.Effect>
-                                                                        <DropShadowEffect ShadowDepth="0" BlurRadius="3" Opacity="0.9" Color="Black" />
-                                                                    </TextBlock.Effect>
-                                                                </TextBlock>
-                                                            </Border>
+                                                        <!-- The canvas as it looks: a picture taken from its live preview. Until it has been opened once,
+                                                             a simpler drawing of its shape, background, border and text color. -->
+                                                        <Border Margin="8,8,8,0" CornerRadius="8" Background="#232323" ClipToBounds="True">
+                                                            <Grid Margin="8">
+                                                                <Image Source="{Binding Thumbnail}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
+                                                                       Visibility="{Binding HasThumbnail, Converter={StaticResource Visibility}}" />
+                                                                <Grid Width="{Binding TileWidth}" Height="{Binding TileHeight}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                      Visibility="{Binding HasThumbnail, Converter={StaticResource InverseVisibility}}">
+                                                                    <Rectangle Fill="{StaticResource TileCheckers}" />
+                                                                    <Border Background="{Binding BackgroundBrush}" BorderBrush="{Binding BorderBrush}" BorderThickness="1.5" CornerRadius="3">
+                                                                        <TextBlock Text="Hello chat!" FontFamily="{Binding FontFamily}" FontSize="15" Margin="6,3"
+                                                                                   Foreground="{Binding TextBrush}" HorizontalAlignment="{Binding TileAlign}" VerticalAlignment="{Binding TileVerticalAlign}">
+                                                                            <TextBlock.Effect>
+                                                                                <DropShadowEffect ShadowDepth="0" BlurRadius="3" Opacity="0.9" Color="Black" />
+                                                                            </TextBlock.Effect>
+                                                                        </TextBlock>
+                                                                    </Border>
+                                                                    <Rectangle Stroke="#66FFFFFF" StrokeThickness="1" StrokeDashArray="3 3" />
+                                                                </Grid>
+                                                            </Grid>
                                                         </Border>
                                                     </DockPanel>
                                                 </Button>

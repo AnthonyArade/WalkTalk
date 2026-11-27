@@ -18,6 +18,37 @@ public sealed class CanvasViewModel : ObservableObject
     {
         Style = style;
         _changed = changed;
+        LoadThumbnail();
+    }
+
+    // A picture of the canvas taken from its live preview (the real page, fonts and effects included), shown on
+    // its tile. Null until the canvas has been opened once; the tile then draws a simpler picture itself.
+    public ImageSource? Thumbnail { get; private set; }
+    public bool HasThumbnail => Thumbnail is not null;
+
+    public void LoadThumbnail()
+    {
+        var path = OverlayImages.ThumbnailPath(Id);
+        Thumbnail = null;
+        if (File.Exists(path))
+        {
+            try
+            {
+                var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad; // don't keep the file locked
+                bitmap.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+                bitmap.UriSource = new Uri(path);
+                bitmap.EndInit();
+                bitmap.Freeze();
+                Thumbnail = bitmap;
+            }
+            catch (Exception ex) when (ex is IOException or NotSupportedException or UriFormatException)
+            {
+            }
+        }
+        OnPropertyChanged(nameof(Thumbnail));
+        OnPropertyChanged(nameof(HasThumbnail));
     }
 
     // The settings themselves; changed through the properties below.

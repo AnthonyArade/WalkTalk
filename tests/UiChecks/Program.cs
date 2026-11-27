@@ -169,6 +169,7 @@ public static class Program
                     for (int i = 0; i < 40 && preview.CoreWebView2 is null; i++)
                         await Task.Delay(250);
                     Console.WriteLine($"preview: browser ready {preview.CoreWebView2 is not null}, showing {preview.Source}");
+                    await Task.Delay(1500);
                     Shot("o1-editor.png");
 
                     // second canvas: a plain one with a picture background, from the + tile
@@ -201,9 +202,11 @@ public static class Program
                     canvas2.SetImage(WhisperStt.Core.Obs.OverlayImages.Import(canvas2.Id, picture));
                     Console.WriteLine($"canvas 2 \"{canvas2.Name}\" font \"{canvas2.FontFamily}\" weight {canvas2.FontWeight}, picture \"{canvas2.Style.BackgroundImage}\" ({canvas2.ImageText})");
                     await Task.Delay(800);
+                    await Task.Delay(1500);
                     Shot("o2-editor-picture.png");
                     obs.BackCommand.Execute(null);
-                    await Task.Delay(400);
+                    for (int i = 0; i < 40 && !(canvas1.HasThumbnail && canvas2.HasThumbnail); i++) await Task.Delay(250);
+                    Console.WriteLine($"tile pictures: canvas 1 {canvas1.HasThumbnail}, canvas 2 {canvas2.HasThumbnail}");
                     Shot("o3-canvases.png");
 
                     // what each OBS page receives
