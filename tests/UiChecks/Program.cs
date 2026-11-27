@@ -38,6 +38,8 @@ public static class Program
         TwitchTokenStore.FilePath = Path.Combine(sandbox, "twitch-sign-in.bin");
         VoiceDataset.Root = Path.Combine(sandbox, "voice");
         PersonalModel.Directory = Path.Combine(sandbox, "models");
+        WhisperStt.Core.Obs.GoogleFonts.Directory = Path.Combine(sandbox, "fonts");
+        ObsViewModel.PreviewDataFolder = Path.Combine(sandbox, "webview");
         VrChatChatbox.Endpoint = new IPEndPoint(IPAddress.Loopback, 9123);
         TwitchApi.AuthBase = "http://127.0.0.1:9/oauth2";
         TwitchApi.ApiBase = "http://127.0.0.1:9/helix";
@@ -60,6 +62,83 @@ public static class Program
             try
             {
                 string Shot(string name) { Capture(window, Path.Combine(args[2], name)); return name; }
+                if (args.Length > 3 && args[3] == "obs")
+                {
+                    // ---- the OBS overlay: style it, install a Google font, send sentences, read what the page gets
+                    var obs = vm.Obs;
+                    obs.OpenCommand.Execute(null);
+                    await Task.Delay(800);
+                    Console.WriteLine($"dialog open {obs.IsOpen}, server running {obs.IsRunning}, url {obs.Url} | {obs.Status}");
+                    obs.IsOn = true;
+                    obs.CanvasWidth = 1280;
+                    obs.CanvasHeight = 300;
+                    obs.FontSize = 64;
+                    obs.TextColor = "#FFE45C";
+                    obs.TextColor = "not a color"; // ignored
+                    obs.Case = WhisperStt.Core.Obs.TextCase.Uppercase;
+                    obs.HorizontalAlign = WhisperStt.Core.Obs.HorizontalAlign.Center;
+                    obs.VerticalAlign = WhisperStt.Core.Obs.VerticalAlign.Bottom;
+                    obs.LineHeight = 1.1;
+                    obs.ShadowX = 4; obs.ShadowY = 4; obs.ShadowBlur = 8; obs.ShadowColor = "#AA000000";
+                    obs.OutlineWidth = 4; obs.OutlineColor = "#1A1A40";
+                    obs.Lines = 2; obs.HideAfter = 0;
+                    Console.WriteLine($"text color after a bad value: {obs.TextColor}");
+
+                    obs.FontQuery = "bang";
+                    for (int i = 0; i < 60 && obs.FontResults.Count == 0 && !obs.SearchStatus.StartsWith("Couldn't") && !obs.SearchStatus.StartsWith("No "); i++)
+                        await Task.Delay(500);
+                    Console.WriteLine($"search 'bang': {string.Join(", ", obs.FontResults.Take(5).Select(r => $"{r.Family} ({r.Category})"))} | {obs.SearchStatus}");
+                    var bangers = obs.FontResults.FirstOrDefault(r => r.Family == "Bangers");
+                    if (bangers is not null)
+                    {
+                        obs.FontActionCommand.Execute(bangers);
+                        for (int i = 0; i < 120 && !bangers.IsInstalled && !obs.SearchStatus.StartsWith("Couldn't"); i++)
+                            await Task.Delay(500);
+                        Console.WriteLine($"install: installed {bangers.IsInstalled}, font now \"{obs.FontFamily}\", in the font list first: {obs.Families.FirstOrDefault()} | {obs.SearchStatus}");
+                        Console.WriteLine($"files: {string.Join(", ", Directory.GetFiles(WhisperStt.Core.Obs.GoogleFonts.Directory, "*", SearchOption.AllDirectories).Select(Path.GetFileName))}");
+                    }
+                    await Task.Delay(300);
+                    Shot("o1-dialog.png");
+                    var preview = (Microsoft.Web.WebView2.Wpf.WebView2)window.FindName("ObsPreview");
+                    for (int i = 0; i < 40 && preview.CoreWebView2 is null; i++)
+                        await Task.Delay(250);
+                    var message = (System.Windows.Controls.TextBlock)window.FindName("ObsPreviewMessage");
+                    Console.WriteLine($"preview: browser ready {preview.CoreWebView2 is not null}, showing {preview.Source} | message: {(message.Visibility == Visibility.Visible ? message.Text : "none")}");
+
+                    // what OBS would receive
+                    using var http = new System.Net.Http.HttpClient();
+                    var page = await http.GetStringAsync(obs.Url);
+                    var css = await http.GetStringAsync(obs.Url + "fonts.css");
+                    Console.WriteLine($"page: {page.Length} chars, has EventSource {page.Contains("EventSource")} | fonts.css: {css.Length} chars, points to local files {css.Contains("url(/fonts/bangers/")}");
+                    using var stream = await http.GetStreamAsync(obs.Url + "events");
+                    using var reader = new StreamReader(stream);
+                    var events = new List<string>();
+                    var reading = Task.Run(async () =>
+                    {
+                        string? line;
+                        while ((line = await reader.ReadLineAsync()) is not null)
+                            if (line.StartsWith("data:") || line.StartsWith("event:"))
+                                lock (events) events.Add(line);
+                    });
+                    await Task.Delay(400);
+                    var onTranscribed = typeof(MainViewModel).GetMethod("OnTranscribed", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                    onTranscribed.Invoke(vm, [new TranscriptSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "Hello chat, welcome to the stream!", 0.9f)]);
+                    onTranscribed.Invoke(vm, [new TranscriptSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "Today we try the new overlay.", 0.9f)]);
+                    await Task.Delay(600);
+                    lock (events)
+                        foreach (var e in events)
+                            Console.WriteLine($"   {(e.Length > 160 ? e[..160] + "…" : e)}");
+                    Console.WriteLine($"status: {obs.Status}");
+                    Console.WriteLine("KEEP-OPEN: the overlay stays up for 45 s at " + obs.Url);
+                    await Task.Delay(45_000);
+                    obs.IsOpen = false;
+                    obs.IsOn = false;
+                    await Task.Delay(300);
+                    Console.WriteLine($"after switching off and closing: server running {obs.IsRunning}");
+                    window.Closed += (_, _) => app.Shutdown();
+                    window.Close();
+                    return;
+                }
                 if (args.Length > 3 && args[3] == "dialogs")
                 {
                     // ---- every dialog opens with the shared frame and closes on a click outside it

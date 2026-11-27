@@ -41,6 +41,41 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(() => ReplacementSearchBox.Focus(), DispatcherPriority.Input);
         };
         _viewModel.Replacements.Picked += () => Dispatcher.BeginInvoke(() => ReplacementCustomBox.Focus(), DispatcherPriority.Input);
+        // The OBS dialog's preview shows the overlay page itself, loaded when the dialog opens.
+        _viewModel.Obs.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ObsViewModel.IsOpen) && _viewModel.Obs.IsOpen)
+                _ = ShowObsPreviewAsync();
+        };
+    }
+
+    private async Task ShowObsPreviewAsync()
+    {
+        var obs = _viewModel.Obs;
+        if (!obs.IsRunning)
+        {
+            ObsPreviewMessage.Text = obs.Status;
+            ObsPreviewMessage.Visibility = Visibility.Visible;
+            return;
+        }
+        try
+        {
+            if (ObsPreview.CoreWebView2 is null)
+            {
+                // Its browser data goes with WalkTalk's other data, not next to the app.
+                var environment = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, ObsViewModel.PreviewDataFolder);
+                await ObsPreview.EnsureCoreWebView2Async(environment);
+                ObsPreview.CoreWebView2!.Settings.AreDefaultContextMenusEnabled = false;
+                ObsPreview.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            }
+            ObsPreview.CoreWebView2!.Navigate(obs.PreviewUrl);
+            ObsPreviewMessage.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex) when (ex is Microsoft.Web.WebView2.Core.WebView2RuntimeNotFoundException or System.Runtime.InteropServices.COMException)
+        {
+            ObsPreviewMessage.Text = "The preview needs the Microsoft Edge WebView2 Runtime, which is part of Windows 11. The overlay itself still works in OBS.";
+            ObsPreviewMessage.Visibility = Visibility.Visible;
+        }
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -140,6 +175,18 @@ public sealed class EqualsToVisibilityConverter : IValueConverter
         string.Equals(value?.ToString() ?? "", parameter?.ToString() ?? "", StringComparison.Ordinal) != Invert
             ? Visibility.Visible
             : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+// A color typed as "#RRGGBB" or "#AARRGGBB", for a swatch next to the box; transparent while it isn't one.
+public sealed class ColorTextToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        WhisperStt.Core.Obs.OverlayStyle.TryParse(value as string, out var a, out var r, out var g, out var b)
+            ? new SolidColorBrush(Color.FromArgb(a, r, g, b))
+            : Brushes.Transparent;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();

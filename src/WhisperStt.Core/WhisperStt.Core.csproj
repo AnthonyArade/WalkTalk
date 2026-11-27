@@ -26,6 +26,8 @@
   <!-- The voice training script, run with the training kit's Python. -->
   <ItemGroup>
     <EmbeddedResource Include="Training\train.py" LogicalName="WhisperStt.Core.Training.train.py" />
+    <!-- The page OBS shows as a Browser Source (see Obs\OverlayServer). -->
+    <EmbeddedResource Include="Obs\overlay.html" LogicalName="WhisperStt.Core.Obs.overlay.html" />
   </ItemGroup>
 
 </Project>

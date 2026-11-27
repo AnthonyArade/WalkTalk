@@ -4,6 +4,7 @@
         xmlns:vm="clr-namespace:WhisperStt.Desktop.ViewModels"
         xmlns:local="clr-namespace:WhisperStt.Desktop"
         xmlns:motion="clr-namespace:WhisperStt.Desktop.Motion"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="WalkTalk" Icon="Assets/WalkTalk.ico" Width="1200" Height="760" MinWidth="900" MinHeight="520"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBrush}" Foreground="{DynamicResource TextBrush}"
@@ -16,6 +17,31 @@
         <local:InverseBooleanToVisibilityConverter x:Key="InverseVisibility" />
         <local:EqualsToVisibilityConverter x:Key="VisibleWhen" />
         <local:EqualsToVisibilityConverter x:Key="VisibleUnless" Invert="True" />
+        <local:ColorTextToBrushConverter x:Key="ColorBrush" />
+
+        <!-- A row of the OBS dialog: a label, a slider and its value -->
+        <Style x:Key="ObsLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,10,0,0" />
+        </Style>
+        <Style x:Key="ObsValue" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Margin" Value="0,10,0,0" />
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style x:Key="ObsSlider" TargetType="Slider" BasedOn="{StaticResource BrandSlider}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,10,8,0" />
+            <Setter Property="IsSnapToTickEnabled" Value="True" />
+        </Style>
+        <Style x:Key="ObsSection" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
 
         <!-- New items arrive: fade in while rising a few pixels on a critically damped spring. -->
         <Storyboard x:Key="EnterFromBelow">
@@ -96,6 +122,24 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
+                </Button>
+                <!-- OBS overlay: shows the transcript on stream; the dot lights up while the canvas is on -->
+                <Button Style="{StaticResource GhostButton}" Margin="2,0,0,0" Padding="9,7" VerticalAlignment="Center"
+                        Command="{Binding Obs.OpenCommand}" ToolTip="OBS overlay: show the transcript on your stream"
+                        AutomationProperties.Name="OBS overlay settings">
+                    <StackPanel Orientation="Horizontal">
+                        <!-- The OBS Studio logo -->
+                        <Viewbox Width="17" Height="17" VerticalAlignment="Center">
+                            <Canvas Width="75" Height="75">
+                                <Ellipse Canvas.Left="1.7" Canvas.Top="1.7" Width="71.6" Height="71.6" Fill="#302E31" Stroke="White" StrokeThickness="3.47" />
+                                <Path Fill="#C4C2C4" Data="M 19.3 18.7 c 1.1 -5.31 4.7 -10.1 9.54 -12.5 -0.842 0.855 -1.86 1.51 -2.64 2.44 -3.19 3.44 -4.63 8.42 -3.75 13 1.11 6.99 7.68 12.7 14.8 12.6 5.52 0.247 10.9 -2.93 13.6 -7.72 5.78 0.196 11.4 3.18 14.7 7.97 1.69 2.5 3.01 5.43 3.1 8.48 -1.07 -4.05 -3.76 -7.65 -7.43 -9.68 -3.55 -2 -7.91 -2.51 -11.8 -1.33 -4.88 1.4 -8.91 5.39 -10.3 10.3 -1.18 3.91 -0.675 8.22 1.18 11.8 -2.58 4.47 -7.24 7.66 -12.3 8.62 -3.89 0.816 -7.98 0.186 -11.6 -1.45 3.24 0.945 6.76 1.11 9.98 -0.035 4.32 -1.43 7.89 -4.9 9.46 -9.18 1.74 -4.66 1.08 -10.2 -1.85 -14.2 -2.19 -3.15 -5.64 -5.37 -9.39 -6.16 -1.19 -0.212 -2.39 -0.308 -3.59 -0.418 -1.91 -3.85 -2.61 -8.32 -1.65 -12.5 z" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="OBS" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,0,0,0"
+                                   Foreground="{DynamicResource ChromeMutedBrush}" />
+                        <Ellipse Width="7" Height="7" Margin="6,1,0,0" VerticalAlignment="Center" Fill="{DynamicResource HighlightBrush}"
+                                 Visibility="{Binding Obs.IsOn, Converter={StaticResource Visibility}}" />
+                    </StackPanel>
                 </Button>
             </StackPanel>
 
@@ -1496,6 +1540,313 @@
                                    TextWrapping="Wrap" />
                     </DockPanel>
                 </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- OBS overlay: the transcript on a transparent page OBS shows as a Browser Source, styled here with a live preview -->
+        <Grid x:Name="ObsOverlay" Grid.RowSpan="2" Background="{DynamicResource ScrimBrush}" MouseLeftButtonDown="Overlay_MouseLeftButtonDown"
+              Visibility="{Binding Obs.IsOpen, Converter={StaticResource Visibility}}">
+            <Border Width="1000" Margin="24" MaxHeight="700" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Style="{StaticResource DialogCard}" DataContext="{Binding Obs}">
+                <Border.RenderTransform>
+                    <ScaleTransform />
+                </Border.RenderTransform>
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource DeleteButton}"
+                                Command="{Binding DataContext.CloseDialogsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                AutomationProperties.Name="Close" ToolTip="Close" Margin="0,-4,-8,0" VerticalAlignment="Top">
+                            <TextBlock Text="&#xE711;" FontFamily="{StaticResource IconFont}" FontSize="12" />
+                        </Button>
+                        <TextBlock Text="OBS overlay" Style="{StaticResource SectionTitle}" />
+                    </DockPanel>
+                    <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,4,0,14" FontFamily="{StaticResource SmallFont}" FontSize="12"
+                               Foreground="{DynamicResource MutedBrush}"
+                               Text="Shows each sentence on your stream. In OBS, add a Browser Source with the address below and the canvas size, and leave its background transparent." />
+
+                    <DockPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Done" MinWidth="96"
+                                Command="{Binding DataContext.CloseDialogsCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        <Button DockPanel.Dock="Left" Style="{StaticResource GhostButton}" Content="Reset style" Command="{Binding ResetCommand}"
+                                ToolTip="Go back to the default look (the canvas switch and installed fonts stay)" />
+                        <TextBlock Text="{Binding Status}" FontFamily="{StaticResource SmallFont}" FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="12,0,12,0" />
+                    </DockPanel>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="430" />
+                            <ColumnDefinition Width="18" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Settings -->
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="0,0,10,0">
+                                <!-- Canvas switch and address -->
+                                <Border Background="{DynamicResource CardBrush}" CornerRadius="10" Padding="14,10">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <CheckBox DockPanel.Dock="Right" Style="{StaticResource SwitchStyle}" IsChecked="{Binding IsOn}"
+                                                      VerticalAlignment="Center" AutomationProperties.Name="Canvas" />
+                                            <TextBlock Text="{Binding ToggleText}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                        <DockPanel Margin="0,10,0,0">
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource TintedButton}" FontSize="12" Padding="12,5"
+                                                    Content="Copy" Command="{Binding CopyUrlCommand}" Margin="8,0,0,0"
+                                                    AutomationProperties.Name="Copy the overlay address" />
+                                            <TextBox Text="{Binding Url, Mode=OneWay}" IsReadOnly="True" VerticalContentAlignment="Center"
+                                                     FontSize="12" AutomationProperties.Name="Overlay address" />
+                                        </DockPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Canvas -->
+                                <Border Background="{DynamicResource CardBrush}" CornerRadius="10" Padding="14,12" Margin="0,10,0,0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="104" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="20" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.ColumnSpan="4" Text="Canvas" Style="{StaticResource ObsSection}" />
+                                        <TextBlock Grid.Row="1" Text="Size (px)" Style="{StaticResource ObsLabel}" />
+                                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CanvasWidth}" Margin="0,10,0,0" KeyDown="NameBox_KeyDown"
+                                                 VerticalContentAlignment="Center" AutomationProperties.Name="Canvas width" ToolTip="Width" />
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Text="×" HorizontalAlignment="Center" Style="{StaticResource ObsLabel}" />
+                                        <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding CanvasHeight}" Margin="0,10,0,0" KeyDown="NameBox_KeyDown"
+                                                 VerticalContentAlignment="Center" AutomationProperties.Name="Canvas height" ToolTip="Height" />
+                                        <TextBlock Grid.Row="2" Text="Sentences" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding LinesText}" Width="80" Style="{StaticResource ObsValue}" />
+                                            <Slider Style="{StaticResource ObsSlider}" Minimum="1" Maximum="6" TickFrequency="1" Value="{Binding Lines}"
+                                                    AutomationProperties.Name="Sentences on screen" ToolTip="How many of the latest sentences stay on screen" />
+                                        </DockPanel>
+                                        <TextBlock Grid.Row="3" Text="Hide after" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding HideAfterText}" Width="80" Style="{StaticResource ObsValue}" />
+                                            <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="60" TickFrequency="1" Value="{Binding HideAfter}"
+                                                    AutomationProperties.Name="Hide after" ToolTip="The text fades out this long after the last sentence (0 = stays)" />
+                                        </DockPanel>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Text -->
+                                <Border Background="{DynamicResource CardBrush}" CornerRadius="10" Padding="14,12" Margin="0,10,0,0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="104" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.ColumnSpan="2" Text="Text" Style="{StaticResource ObsSection}" />
+
+                                        <TextBlock Grid.Row="1" Text="Font" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="1" Grid.Column="1" Margin="0,10,0,0">
+                                            <CheckBox DockPanel.Dock="Right" Style="{StaticResource ChipToggle}" IsChecked="{Binding Bold}" Content="Bold"
+                                                      Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.Name="Bold" />
+                                            <ComboBox ItemsSource="{Binding Families}" SelectedItem="{Binding FontFamily}" IsTextSearchEnabled="True"
+                                                      AutomationProperties.Name="Font family" MaxDropDownHeight="320">
+                                                <ComboBox.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <VirtualizingStackPanel />
+                                                    </ItemsPanelTemplate>
+                                                </ComboBox.ItemsPanel>
+                                            </ComboBox>
+                                        </DockPanel>
+
+                                        <!-- Google Fonts -->
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,8,0,0">
+                                            <Grid>
+                                                <TextBox x:Name="FontSearchBox" Text="{Binding FontQuery, UpdateSourceTrigger=PropertyChanged}"
+                                                         VerticalContentAlignment="Center" Padding="28,0,8,0" AutomationProperties.Name="Search Google Fonts">
+                                                    <TextBox.InputBindings>
+                                                        <KeyBinding Key="Enter" Command="{Binding InstallTypedCommand}" />
+                                                    </TextBox.InputBindings>
+                                                </TextBox>
+                                                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="12" IsHitTestVisible="False"
+                                                           Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TertiaryBrush}" />
+                                                <TextBlock Text="Search Google Fonts" IsHitTestVisible="False" Margin="30,0,0,0" FontSize="12"
+                                                           VerticalAlignment="Center" Foreground="{DynamicResource TertiaryBrush}"
+                                                           Visibility="{Binding Text, ElementName=FontSearchBox, Converter={StaticResource VisibleWhen}, ConverterParameter=''}" />
+                                            </Grid>
+                                            <TextBlock Text="{Binding SearchStatus}" TextWrapping="Wrap" FontFamily="{StaticResource SmallFont}" FontSize="11"
+                                                       Foreground="{DynamicResource MutedBrush}" Margin="0,6,0,0"
+                                                       Visibility="{Binding SearchStatus, Converter={StaticResource VisibleUnless}, ConverterParameter=''}" />
+                                            <ItemsControl ItemsSource="{Binding FontResults}" MaxHeight="190" Margin="0,4,0,0">
+                                                <ItemsControl.Template>
+                                                    <ControlTemplate TargetType="ItemsControl">
+                                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                                            <ItemsPresenter />
+                                                        </ScrollViewer>
+                                                    </ControlTemplate>
+                                                </ItemsControl.Template>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:FontResult}">
+                                                        <DockPanel Margin="0,1,6,1">
+                                                            <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{Binding ActionText}"
+                                                                    Command="{Binding DataContext.Obs.FontActionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding}" AutomationProperties.Name="{Binding Family}" />
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Category}" FontFamily="{StaticResource SmallFont}" FontSize="11"
+                                                                       Foreground="{DynamicResource TertiaryBrush}" VerticalAlignment="Center" Margin="8,0" />
+                                                            <TextBlock Text="{Binding Family}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                        </DockPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Row="3" Text="Size" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="3" Grid.Column="1">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding FontSizeText}" Width="60" Style="{StaticResource ObsValue}" />
+                                            <Slider Style="{StaticResource ObsSlider}" Minimum="12" Maximum="200" TickFrequency="1" Value="{Binding FontSize}"
+                                                    AutomationProperties.Name="Font size" />
+                                        </DockPanel>
+
+                                        <TextBlock Grid.Row="4" Text="Color" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="4" Grid.Column="1" Margin="0,10,0,0">
+                                            <Border DockPanel.Dock="Right" Width="30" Height="26" CornerRadius="6" Margin="8,0,0,0" BorderThickness="1"
+                                                    BorderBrush="{DynamicResource DialogStrokeBrush}" Background="{Binding TextColor, Converter={StaticResource ColorBrush}}" />
+                                            <TextBox Text="{Binding TextColor, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
+                                                     AutomationProperties.Name="Text color" ToolTip="#RRGGBB, or #AARRGGBB with transparency first" />
+                                        </DockPanel>
+
+                                        <TextBlock Grid.Row="5" Text="Letters" Style="{StaticResource ObsLabel}" />
+                                        <ComboBox Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" ItemsSource="{Binding Cases}" DisplayMemberPath="Label"
+                                                  SelectedValuePath="Value" SelectedValue="{Binding Case}" AutomationProperties.Name="Letter case" />
+
+                                        <TextBlock Grid.Row="6" Text="Align" Style="{StaticResource ObsLabel}" />
+                                        <Grid Grid.Row="6" Grid.Column="1" Margin="0,10,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox ItemsSource="{Binding HorizontalAligns}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                      SelectedValue="{Binding HorizontalAlign}" AutomationProperties.Name="Horizontal alignment" ToolTip="Horizontal" />
+                                            <ComboBox Grid.Column="2" ItemsSource="{Binding VerticalAligns}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                      SelectedValue="{Binding VerticalAlign}" AutomationProperties.Name="Vertical alignment" ToolTip="Vertical" />
+                                        </Grid>
+
+                                        <TextBlock Grid.Row="7" Text="Line height" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="7" Grid.Column="1">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding LineHeightText}" Width="60" Style="{StaticResource ObsValue}" />
+                                            <Slider Style="{StaticResource ObsSlider}" Minimum="0.8" Maximum="3" TickFrequency="0.05" Value="{Binding LineHeight}"
+                                                    AutomationProperties.Name="Line height" />
+                                        </DockPanel>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Shadow -->
+                                <Border Background="{DynamicResource CardBrush}" CornerRadius="10" Padding="14,12" Margin="0,10,0,0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="104" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <DockPanel Grid.ColumnSpan="2">
+                                            <CheckBox DockPanel.Dock="Right" Style="{StaticResource SwitchStyle}" IsChecked="{Binding Shadow}"
+                                                      VerticalAlignment="Center" AutomationProperties.Name="Text shadow" />
+                                            <TextBlock Text="Text shadow" Style="{StaticResource ObsSection}" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                        <TextBlock Grid.Row="1" Text="Horizontal" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="1" Grid.Column="1" IsEnabled="{Binding Shadow}">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding ShadowXText}" Width="60" Style="{StaticResource ObsValue}" />
+                                            <Slider Style="{StaticResource ObsSlider}" Minimum="-30" Maximum="30" TickFrequency="1" Value="{Binding ShadowX}"
+                                                    AutomationProperties.Name="Shadow horizontal position" />
+                                        </DockPanel>
+                                        <TextBlock Grid.Row="2" Text="Vertical" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="2" Grid.Column="1" IsEnabled="{Binding Shadow}">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding ShadowYText}" Width="60" Style="{StaticResource ObsValue}" />
+                                            <Slider Style="{StaticResource ObsSlider}" Minimum="-30" Maximum="30" TickFrequency="1" Value="{Binding ShadowY}"
+                                                    AutomationProperties.Name="Shadow vertical position" />
+                                        </DockPanel>
+                                        <TextBlock Grid.Row="3" Text="Blur" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="3" Grid.Column="1" IsEnabled="{Binding Shadow}">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding ShadowBlurText}" Width="60" Style="{StaticResource ObsValue}" />
+                                            <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="40" TickFrequency="1" Value="{Binding ShadowBlur}"
+                                                    AutomationProperties.Name="Shadow blur" />
+                                        </DockPanel>
+                                        <TextBlock Grid.Row="4" Text="Color" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="4" Grid.Column="1" Margin="0,10,0,0" IsEnabled="{Binding Shadow}">
+                                            <Border DockPanel.Dock="Right" Width="30" Height="26" CornerRadius="6" Margin="8,0,0,0" BorderThickness="1"
+                                                    BorderBrush="{DynamicResource DialogStrokeBrush}" Background="{Binding ShadowColor, Converter={StaticResource ColorBrush}}" />
+                                            <TextBox Text="{Binding ShadowColor, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
+                                                     AutomationProperties.Name="Shadow color" ToolTip="#RRGGBB, or #AARRGGBB with transparency first" />
+                                        </DockPanel>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Outline -->
+                                <Border Background="{DynamicResource CardBrush}" CornerRadius="10" Padding="14,12" Margin="0,10,0,0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="104" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.ColumnSpan="2" Text="Outline" Style="{StaticResource ObsSection}" />
+                                        <TextBlock Grid.Row="1" Text="Size" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="1" Grid.Column="1">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding OutlineWidthText}" Width="60" Style="{StaticResource ObsValue}" />
+                                            <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="20" TickFrequency="1" Value="{Binding OutlineWidth}"
+                                                    AutomationProperties.Name="Outline size" />
+                                        </DockPanel>
+                                        <TextBlock Grid.Row="2" Text="Color" Style="{StaticResource ObsLabel}" />
+                                        <DockPanel Grid.Row="2" Grid.Column="1" Margin="0,10,0,0">
+                                            <Border DockPanel.Dock="Right" Width="30" Height="26" CornerRadius="6" Margin="8,0,0,0" BorderThickness="1"
+                                                    BorderBrush="{DynamicResource DialogStrokeBrush}" Background="{Binding OutlineColor, Converter={StaticResource ColorBrush}}" />
+                                            <TextBox Text="{Binding OutlineColor, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
+                                                     AutomationProperties.Name="Outline color" ToolTip="#RRGGBB, or #AARRGGBB with transparency first" />
+                                        </DockPanel>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- Live preview: the same page OBS shows, scaled to fit, over a checkerboard where it is transparent -->
+                        <DockPanel Grid.Column="2">
+                            <TextBlock DockPanel.Dock="Top" Text="Preview" Style="{StaticResource ObsSection}" Margin="0,0,0,8" />
+                            <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" FontFamily="{StaticResource SmallFont}" FontSize="11"
+                                       Foreground="{DynamicResource MutedBrush}" Margin="0,10,0,0"
+                                       Text="In OBS: Sources, +, Browser. Paste the address, set Width and Height to the canvas size above, and keep &quot;Shutdown source when not visible&quot; off. A Google font must be installed here to show in OBS." />
+                            <Border CornerRadius="10" Background="#2C2C2C" ClipToBounds="True">
+                                <Grid>
+                                    <wv2:WebView2 x:Name="ObsPreview" DefaultBackgroundColor="Transparent" />
+                                    <TextBlock x:Name="ObsPreviewMessage" TextWrapping="Wrap" Margin="20" FontSize="12" Foreground="#CCCCCC"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" Visibility="Collapsed" />
+                                </Grid>
+                            </Border>
+                        </DockPanel>
+                    </Grid>
+                </DockPanel>
             </Border>
         </Grid>
     </Grid>

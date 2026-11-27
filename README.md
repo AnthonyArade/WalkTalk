@@ -13,6 +13,7 @@ WalkTalk can also learn your voice: read a set of sentences aloud and it retrain
 - **Voice commands.** Say "Clean" to empty the fields, or "Send" / "Enter" to press Enter.
 - **Word hints.** Names and terms Whisper should spell exactly (usernames, games, jargon).
 - **Word replacements.** Search the words the model knows and write something else in their place: an abbreviation, slang, an emoji.
+- **OBS overlay.** Shows each sentence on your stream through an OBS Browser Source, styled your way: canvas size, font (any font on your PC, or search and install Google Fonts), size, color, letter case, alignment, line height, text shadow and outline, with a live preview.
 - **Read aloud (TTS).** Optionally reads each sentence back with a natural Kokoro voice, also offline.
 - **Voice training.** Retrains the model on your recordings so it understands your accent better (see below).
 - **Dark and light themes.**
@@ -49,6 +50,14 @@ Models, settings and recordings are kept in `%LOCALAPPDATA%\WhisperStt`. Uninsta
 3. Click **Start listening** and speak. Pause briefly at the end of each sentence.
 
 Click **Stop** when you are done: the model is unloaded to free the graphics card for games and other apps.
+
+### OBS overlay
+
+1. Click **OBS** next to the theme button and turn the canvas on.
+2. In OBS: **Sources**, **+**, **Browser**. Paste the address shown in WalkTalk (`http://127.0.0.1:7480/`) and set Width and Height to the canvas size.
+3. Style the text in WalkTalk; the preview and OBS update as you change it.
+
+The overlay is served from your own PC only (127.0.0.1). A Google font must be installed in WalkTalk to appear in OBS; installed fonts are kept, so the overlay also works offline.
 
 ### Models
 
@@ -120,8 +129,8 @@ The test tools never touch your real settings or recordings: they work on folder
 This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
 
 - Speech recognition, text-to-speech and voice training run entirely on your PC. No audio ever leaves it.
-- The text of a sentence is sent only to the destinations you switch on: Twitch chat (to Twitch, once you connect your account) and VRChat (to the game on your own PC).
-- The other connections are downloads you start: the speech model (from Hugging Face, through Whisper.net), the text-to-speech voices (from GitHub) and the voice-training tools (from nuget.org and pytorch.org).
+- The text of a sentence is sent only to the destinations you switch on: Twitch chat (to Twitch, once you connect your account), VRChat (to the game on your own PC) and the OBS overlay (served on your own PC only).
+- The other connections are downloads you start: the speech model (from Hugging Face, through Whisper.net), the text-to-speech voices (from GitHub), the voice-training tools (from nuget.org and pytorch.org), and Google Fonts when you search for or install one (from fonts.google.com).
 
 ## Code signing policy
 

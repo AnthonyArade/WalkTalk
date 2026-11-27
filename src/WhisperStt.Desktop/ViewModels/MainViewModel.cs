@@ -65,6 +65,7 @@ public sealed class MainViewModel : ObservableObject
             Post: Post));
         VrChat = new VrChatViewModel(state.VrChat, SaveState);
         Twitch = new TwitchViewModel(state, SaveState, Post);
+        Obs = new ObsViewModel(state, SaveState, Post);
         Replacements = new ReplacementsViewModel(state.Replacements, () => SelectedModel, SaveState);
         ReadAloud = new ReadAloudViewModel(state, SaveState, Post);
         ReadAloud.ReadingChanged += OnReadingAloudChanged;
@@ -100,6 +101,7 @@ public sealed class MainViewModel : ObservableObject
             IsHintsOpen = false;
             Replacements.IsOpen = false;
             ReadAloud.IsOpen = false;
+            Obs.IsOpen = false;
             if (VoiceTraining.IsOpen)
                 VoiceTraining.Close();
         });
@@ -142,6 +144,7 @@ public sealed class MainViewModel : ObservableObject
     public ReplacementsViewModel Replacements { get; }
     public VrChatViewModel VrChat { get; }
     public TwitchViewModel Twitch { get; }
+    public ObsViewModel Obs { get; }
     public ICommand OpenHintsCommand { get; }
     public ICommand CloseHintsCommand { get; }
     public ICommand AddHintCommand { get; }
@@ -411,6 +414,7 @@ public sealed class MainViewModel : ObservableObject
         ReadAloud.Dispose();
         VrChat.Dispose();
         Twitch.Shutdown();
+        Obs.Dispose();
     }
 
     // While a sentence is read aloud through speakers, the microphone would hear it: pause it if asked to,
@@ -453,7 +457,12 @@ public sealed class MainViewModel : ObservableObject
         if (twitch is not null)
             Twitch.Deliver(command, text, twitch);
         if (command is null)
+        {
             ReadAloud.Speak(text);
+            Obs.Show(text);
+        }
+        else if (command == VoiceCommand.Clear)
+            Obs.Clear();
     }
 
     // -- reviewing a sentence: the user corrects what was written, and the voice model learns from it
@@ -721,11 +730,12 @@ public sealed class MainViewModel : ObservableObject
                 Targets = Targets.Select(t => new TargetState { Name = t.Name, IsOn = t.IsOn, PressEnter = t.PressEnter, Target = t.Info }).ToList()
             };
             // These are null only while the constructor is still running; keep what was loaded then.
-            if (VoiceTraining is null || ReadAloud is null || Replacements is null || VrChat is null || Twitch is null)
+            if (VoiceTraining is null || ReadAloud is null || Replacements is null || VrChat is null || Twitch is null || Obs is null)
                 return;
             state.Replacements = Replacements.Items.ToList();
             state.VrChat = VrChat.IsOn;
             Twitch.WriteTo(state);
+            Obs.WriteTo(state);
             VoiceTraining.WriteTo(state);
             ReadAloud.WriteTo(state);
             StateStore.Save(state);

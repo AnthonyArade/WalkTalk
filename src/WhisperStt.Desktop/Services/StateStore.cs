@@ -36,6 +36,9 @@ public sealed class AppState
     // The built-in Twitch chat destination. The sign-in itself is kept apart, encrypted (TwitchTokenStore).
     public bool TwitchOn { get; set; }
     public string TwitchChannel { get; set; } = "";
+    // The OBS overlay: whether the canvas is on, and how the text looks.
+    public bool ObsOn { get; set; }
+    public WhisperStt.Core.Obs.OverlayStyle? Obs { get; set; }
     public List<TargetState> Targets { get; set; } = [];
 }
 

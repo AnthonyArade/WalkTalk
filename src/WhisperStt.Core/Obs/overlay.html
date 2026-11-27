@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>WalkTalk overlay</title>
+<link id="fonts" rel="stylesheet" href="/fonts.css">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  #canvas {
+    position: absolute; left: 0; top: 0; box-sizing: border-box;
+    display: flex; flex-direction: column; overflow: hidden;
+    transform-origin: 0 0;
+  }
+  #canvas.top { justify-content: flex-start; }
+  #canvas.middle { justify-content: center; }
+  #canvas.bottom { justify-content: flex-end; }
+  .line {
+    white-space: pre-wrap; overflow-wrap: break-word;
+    paint-order: stroke fill;
+    transition: opacity 0.4s ease;
+  }
+  .line.gone { opacity: 0; }
+  /* Preview inside WalkTalk: a checkerboard shows what is transparent, and the canvas is scaled to fit. */
+  body.preview { background: repeating-conic-gradient(#3a3a3a 0 25%, #2c2c2c 0 50%) 0 0 / 24px 24px; }
+  body.preview #canvas { outline: 1px dashed rgba(255,255,255,0.35); }
+</style>
+</head>
+<body>
+<div id="canvas"></div>
+<script>
+  const preview = new URLSearchParams(location.search).has('preview');
+  const sample = ['This is how your transcript', 'will look in OBS.'];
+  const canvas = document.getElementById('canvas');
+  let style = null, lines = [], timer = null;
+  if (preview) document.body.classList.add('preview');
+
+  function applyStyle() {
+    if (!style || style.width === undefined) return;
+    Object.assign(canvas.style, {
+      width: style.width + 'px', height: style.height + 'px',
+      fontFamily: style.fontFamily, fontSize: style.fontSize + 'px', fontWeight: style.fontWeight,
+      color: style.color, textTransform: style.textTransform, textAlign: style.textAlign,
+      lineHeight: style.lineHeight, textShadow: style.textShadow,
+      // The outline is drawn under the letters (paint-order), so only its outer half shows: double it.
+      webkitTextStroke: style.outlineWidth > 0 ? (style.outlineWidth * 2) + 'px ' + style.outlineColor : '0',
+    });
+    canvas.className = style.verticalAlign;
+    fit();
+    render();
+  }
+
+  // In the preview the canvas shrinks to fit the window; in OBS it is drawn at its real size.
+  function fit() {
+    if (!preview || !style) { canvas.style.transform = ''; return; }
+    const scale = Math.min(1, (innerWidth - 16) / style.width, (innerHeight - 16) / style.height);
+    const left = (innerWidth - style.width * scale) / 2, top = (innerHeight - style.height * scale) / 2;
+    canvas.style.transform = `translate(${left}px, ${top}px) scale(${scale})`;
+  }
+
+  function render() {
+    const shown = lines.length ? lines : (preview ? sample : []);
+    canvas.replaceChildren(...shown.map(text => {
+      const div = document.createElement('div');
+      div.className = 'line';
+      div.textContent = text;
+      return div;
+    }));
+  }
+
+  function hideLater() {
+    clearTimeout(timer);
+    if (!style || !style.hideAfter || preview) return;
+    timer = setTimeout(() => {
+      canvas.querySelectorAll('.line').forEach(l => l.classList.add('gone'));
+      setTimeout(() => { lines = []; render(); }, 450);
+    }, style.hideAfter * 1000);
+  }
+
+  const events = new EventSource('/events');
+  events.addEventListener('style', e => { style = JSON.parse(e.data); applyStyle(); });
+  events.addEventListener('line', e => {
+    lines.push(JSON.parse(e.data).text);
+    lines = lines.slice(-(style ? style.lines : 2));
+    render();
+    hideLater();
+  });
+  events.addEventListener('clear', () => { lines = []; render(); });
+  events.addEventListener('fonts', () => {
+    const link = document.getElementById('fonts');
+    link.href = '/fonts.css?' + Date.now();
+  });
+  addEventListener('resize', fit);
+</script>
+</body>
+</html>
