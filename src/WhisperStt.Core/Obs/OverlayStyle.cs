@@ -6,7 +6,9 @@ public enum TextCase { AsSaid, Uppercase, Lowercase, Capitalize }
 public enum HorizontalAlign { Left, Center, Right }
 public enum VerticalAlign { Top, Middle, Bottom }
 public enum BackgroundType { None, Color, Gradient, Image }
-public enum ImageFit { Cover, Contain, Stretch, Tile }
+// Slice: a 9-slice frame. The picture's corners keep their size and its edges stretch along the box (a
+// dialogue box drawn as a small picture, as in pixel-art games). New values go at the end: settings store numbers.
+public enum ImageFit { Cover, Contain, Stretch, Tile, Slice }
 public enum RevealUnit { Character, Word }
 public enum RevealEffect { Appear, Fade, Pop, Rise }
 public enum ClearAnimation { None, Fade, SlideUp, SlideDown, Shrink }
@@ -79,6 +81,9 @@ public sealed class OverlayStyle
     // A copy of the chosen picture, kept with WalkTalk's data (see OverlayImages).
     public string BackgroundImage { get; set; } = "";
     public ImageFit ImageFit { get; set; } = ImageFit.Cover;
+    // With the 9-slice fit: how far the corners reach into the picture (its pixels), and how much bigger it is drawn.
+    public double SliceSize { get; set; } = 16;
+    public double SliceScale { get; set; } = 1;
 
     // -- border
     public bool Border { get; set; }
@@ -103,6 +108,23 @@ public sealed class OverlayStyle
     public OverlaySound SentenceSound { get; set; } = new();
     public OverlaySound ShowSound { get; set; } = new();
     public OverlaySound HideSound { get; set; } = new();
+
+    // -- avatar: a picture placed anywhere on the canvas (a portrait beside the text), which the text keeps clear of.
+    // While a sentence is being written the base and active pictures take turns, each shown AvatarTransition ms. Like
+    // the box, the avatar clears AvatarClearDelaySeconds after the last sentence (0 = it stays), fading over
+    // AvatarClearDuration ms. Both pictures are copies kept with WalkTalk's data (see OverlayImages).
+    public bool Avatar { get; set; }
+    public int AvatarX { get; set; }
+    public int AvatarY { get; set; }
+    public int AvatarWidth { get; set; } = 160;
+    public int AvatarHeight { get; set; } = 160;
+    public string AvatarImage { get; set; } = "";
+    public double AvatarOpacity { get; set; } = 1;
+    public string AvatarActiveImage { get; set; } = "";
+    public double AvatarActiveOpacity { get; set; } = 1;
+    public double AvatarClearDelaySeconds { get; set; }
+    public double AvatarClearDuration { get; set; } = 400;
+    public double AvatarTransition { get; set; } = 150;
 
     public static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
@@ -141,6 +163,48 @@ public sealed class OverlayStyle
 
     // What the overlay page receives: ready-to-use CSS values. imageVersion changes when the picture does,
     // so OBS doesn't keep showing an old one.
+    public bool IsSliced => Background == BackgroundType.Image && ImageFit == ImageFit.Slice && BackgroundImage.Length > 0;
+
+    // The 9-slice frame is drawn as the box's border (CSS border-image): its width is the corners' size, drawn bigger
+    // by the scale, and "fill" puts the picture's middle behind the text.
+    private double SliceWidth => Math.Clamp(SliceSize, 1, 500) * Math.Clamp(SliceScale, 0.25, 16);
+
+    // The gap kept between the avatar and a box that moves aside for it.
+    private const double AvatarGap = 8;
+
+    public bool HasAvatar => Avatar && (AvatarImage.Length > 0 || AvatarActiveImage.Length > 0);
+
+    // Where the text may go, so it never runs under the avatar (top, right, bottom, left, in px). The avatar belongs to
+    // the canvas side it is nearest to, and that side is kept clear up to the avatar's far edge:
+    //  - a box that fills the canvas that way keeps its background under the avatar (a portrait inside a dialogue
+    //    box) and gets more padding on that side, so its text starts past the avatar, as far from it as from the edge;
+    //  - a box that shrinks to its text that way is placed in the rest of the canvas instead.
+    public (double[] Padding, double[] CanvasPadding) Layout()
+    {
+        double[] padding = [Math.Clamp(PaddingY, 0, 400), Math.Clamp(PaddingX, 0, 400), Math.Clamp(PaddingY, 0, 400), Math.Clamp(PaddingX, 0, 400)];
+        double[] canvas = [0, 0, 0, 0];
+        if (!HasAvatar)
+            return (padding, canvas);
+
+        double width = Math.Clamp(Width, 50, 7680), height = Math.Clamp(Height, 20, 4320);
+        double x = AvatarX, y = AvatarY, w = Math.Max(1, AvatarWidth), h = Math.Max(1, AvatarHeight);
+        var border = IsSliced ? SliceWidth : Border && BorderWidth > 0 ? Math.Clamp(BorderWidth, 0, 100) : 0;
+        double centerX = (x + w / 2) / width, centerY = (y + h / 2) / height;
+        // 0 top, 1 right, 2 bottom, 3 left: how far the avatar's middle is from each side, as a share of the canvas.
+        var distances = new[] { centerY, 1 - centerX, 1 - centerY, centerX };
+        var side = Array.IndexOf(distances, distances.Min());
+        // How far into the canvas, from that side, the avatar reaches.
+        var reach = side switch { 0 => y + h, 1 => width - x, 2 => height - y, _ => x + w };
+        if (reach <= 0)
+            return (padding, canvas); // outside the canvas: nothing to avoid
+        var shrinks = side is 1 or 3 ? AutoWidth : AutoHeight;
+        if (shrinks)
+            canvas[side] = Math.Min(reach + AvatarGap, (side is 1 or 3 ? width : height) - 20);
+        else
+            padding[side] = Math.Max(padding[side], Math.Min(reach + padding[side] - border, (side is 1 or 3 ? width : height) - 2 * border - 20));
+        return (padding, canvas);
+    }
+
     public object ToPage(long imageVersion = 0) => new
     {
         width = Math.Clamp(Width, 50, 7680),
@@ -150,7 +214,8 @@ public sealed class OverlayStyle
 
         autoWidth = AutoWidth,
         autoHeight = AutoHeight,
-        padding = $"{N(Math.Clamp(PaddingY, 0, 400))}px {N(Math.Clamp(PaddingX, 0, 400))}px",
+        padding = string.Join(' ', Layout().Padding.Select(p => N(p) + "px")),
+        canvasPadding = string.Join(' ', Layout().CanvasPadding.Select(p => N(p) + "px")),
 
         fontFamily = CssFamily(FontFamily),
         fontWeight = Math.Clamp(FontWeight / 100 * 100, 100, 900),
@@ -170,7 +235,7 @@ public sealed class OverlayStyle
         outlineWidth = Outline ? Math.Clamp(OutlineWidth, 0, 40) : 0,
         outlineColor = Css(OutlineColor, "#000000"),
 
-        background = Background switch
+        background = IsSliced ? "transparent" : Background switch
         {
             BackgroundType.Color => Css(BackgroundColor, "#000000"),
             BackgroundType.Gradient => $"linear-gradient({N(GradientAngle)}deg, {Css(BackgroundColor, "#000000")}, {Css(BackgroundColor2, "#000000")})",
@@ -183,9 +248,13 @@ public sealed class OverlayStyle
             }}",
             _ => "transparent"
         },
-        border = Border && BorderWidth > 0 ? $"{N(Math.Clamp(BorderWidth, 0, 100))}px solid {Css(BorderColor, "#FFFFFF")}" : "none",
-        // The corners belong to the border: with it off, the box keeps square corners.
-        borderRadius = Border ? Math.Clamp(BorderRadius, 0, 1000) : 0,
+        border = IsSliced ? $"{N(SliceWidth)}px solid transparent"
+            : Border && BorderWidth > 0 ? $"{N(Math.Clamp(BorderWidth, 0, 100))}px solid {Css(BorderColor, "#FFFFFF")}" : "none",
+        borderImage = IsSliced ? $"url(/bg/{Id}?v={imageVersion}) {N(Math.Clamp(SliceSize, 1, 500))} fill / {N(SliceWidth)}px stretch" : "none",
+        // Pixel art drawn bigger stays sharp instead of blurring.
+        imageRendering = IsSliced && SliceScale > 1 ? "pixelated" : "auto",
+        // The corners belong to the border: with it off (or a frame picture instead), the box keeps square corners.
+        borderRadius = Border && !IsSliced ? Math.Clamp(BorderRadius, 0, 1000) : 0,
 
         animate = Animate,
         revealUnit = RevealUnit.ToString().ToLowerInvariant(),
@@ -209,6 +278,21 @@ public sealed class OverlayStyle
             url = s.Sound.Kind == "file" && s.Sound.File.Length > 0 ? $"/sound/{Id}/{s.Slot}?v={imageVersion}" : "",
             volume = Math.Clamp(s.Sound.Volume, 0, 1),
         }),
+        avatar = new
+        {
+            on = HasAvatar,
+            x = Math.Clamp(AvatarX, -7680, 7680),
+            y = Math.Clamp(AvatarY, -4320, 4320),
+            width = Math.Clamp(AvatarWidth, 1, 7680),
+            height = Math.Clamp(AvatarHeight, 1, 4320),
+            baseUrl = AvatarImage.Length > 0 ? $"/avatar/{Id}/base?v={imageVersion}" : "",
+            baseOpacity = Math.Clamp(AvatarOpacity, 0, 1),
+            activeUrl = AvatarActiveImage.Length > 0 ? $"/avatar/{Id}/active?v={imageVersion}" : "",
+            activeOpacity = Math.Clamp(AvatarActiveOpacity, 0, 1),
+            clearDelay = Math.Max(0, AvatarClearDelaySeconds),
+            clearDuration = Math.Clamp(AvatarClearDuration, 0, 5000),
+            transition = Math.Clamp(AvatarTransition, 0, 5000),
+        },
     };
 
     // "#AARRGGBB" (WPF order) to CSS rgba(); anything that isn't a color gives the fallback.

@@ -67,6 +67,68 @@ public static class OverlayImages
         _ => "audio/mpeg"
     };
 
+    // -- the avatar's two pictures ("base" and "active"), copied here like the background
+
+    public static readonly string[] AvatarSlots = ["base", "active"];
+
+    public static string ImportAvatar(string canvasId, string slot, string sourcePath)
+    {
+        var extension = Path.GetExtension(sourcePath).ToLowerInvariant();
+        if (!Extensions.Contains(extension))
+            throw new InvalidOperationException("Choose a PNG, JPG, GIF, WebP or BMP picture.");
+        System.IO.Directory.CreateDirectory(Directory);
+        RemoveAvatar(canvasId, slot);
+        var name = $"{canvasId}-avatar-{slot}{extension}";
+        File.Copy(sourcePath, Path.Combine(Directory, name), overwrite: true);
+        return name;
+    }
+
+    public static void RemoveAvatar(string canvasId, string slot)
+    {
+        foreach (var extension in Extensions)
+            File.Delete(Path.Combine(Directory, $"{canvasId}-avatar-{slot}{extension}"));
+    }
+
+    public static void RemoveAvatars(string canvasId)
+    {
+        foreach (var slot in AvatarSlots)
+            RemoveAvatar(canvasId, slot);
+    }
+
+    // -- files that come inside an imported template (no file on disk to copy): written straight here
+
+    public static string SaveImage(string canvasId, string extension, byte[] bytes)
+    {
+        System.IO.Directory.CreateDirectory(Directory);
+        Remove(canvasId);
+        return Save(canvasId + Checked(extension, Extensions), bytes);
+    }
+
+    public static string SaveSound(string canvasId, string slot, string extension, byte[] bytes)
+    {
+        System.IO.Directory.CreateDirectory(Directory);
+        RemoveSound(canvasId, slot);
+        return Save($"{canvasId}-{slot}{Checked(extension, SoundExtensions)}", bytes);
+    }
+
+    public static string SaveAvatar(string canvasId, string slot, string extension, byte[] bytes)
+    {
+        System.IO.Directory.CreateDirectory(Directory);
+        RemoveAvatar(canvasId, slot);
+        return Save($"{canvasId}-avatar-{slot}{Checked(extension, Extensions)}", bytes);
+    }
+
+    private static string Checked(string extension, string[] allowed) =>
+        allowed.Contains(extension.ToLowerInvariant()) ? extension.ToLowerInvariant()
+            : throw new InvalidOperationException($"WalkTalk can't use {extension} files here.");
+
+    private static string Save(string name, byte[] bytes)
+    {
+        System.IO.Directory.CreateDirectory(Directory);
+        File.WriteAllBytes(Path.Combine(Directory, name), bytes);
+        return name;
+    }
+
     // A picture of how a canvas looks, taken from its preview, for its tile in the canvas list.
     public static string ThumbnailPath(string canvasId) => Path.Combine(Directory, canvasId + ".thumb.png");
 

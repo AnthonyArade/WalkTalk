@@ -1712,7 +1712,8 @@
         <Grid x:Name="ObsOverlay" Grid.RowSpan="2" Background="{DynamicResource ScrimBrush}" MouseLeftButtonDown="Overlay_MouseLeftButtonDown"
               Visibility="{Binding Obs.IsOpen, Converter={StaticResource Visibility}}">
             <Border Width="1040" Margin="24" MaxHeight="740" VerticalAlignment="Center" HorizontalAlignment="Center"
-                    Style="{StaticResource DialogCard}" DataContext="{Binding Obs}">
+                    Style="{StaticResource DialogCard}" DataContext="{Binding Obs}"
+                    AllowDrop="True" DragEnter="ObsDialog_DragOver" DragOver="ObsDialog_DragOver" DragLeave="ObsDialog_DragLeave" Drop="ObsDialog_Drop">
                 <Border.RenderTransform>
                     <ScaleTransform />
                 </Border.RenderTransform>
@@ -1729,7 +1730,7 @@
                         </DockPanel>
                         <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,4,0,16" FontFamily="{StaticResource SmallFont}" FontSize="12"
                                    Foreground="{DynamicResource MutedBrush}"
-                                   Text="Each text template is a page OBS shows as a Browser Source, with its own size and look. Every sentence appears on the text templates that are switched on. Click one to change it, or + to add one." />
+                                   Text="Each text template is a page OBS shows as a Browser Source, with its own size and look. Every sentence appears on the text templates that are switched on. Click one to change it, or + to add one. To bring in a template made in Curses (.cursestmp), import it or drop the file here." />
 
                         <DockPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
                             <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Done" MinWidth="96"
@@ -1802,6 +1803,17 @@
                                         <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="34" HorizontalAlignment="Center"
                                                    Foreground="{DynamicResource AccentHoverBrush}" />
                                         <TextBlock Text="Add a text template" FontSize="13" Margin="0,10,0,0" HorizontalAlignment="Center" Foreground="{DynamicResource MutedBrush}" />
+                                    </StackPanel>
+                                </Button>
+                                <!-- Import a template made in Curses -->
+                                <Button Style="{StaticResource CanvasTile}" Width="200" Height="214" Margin="0,0,14,14" Command="{Binding ImportTemplateCommand}"
+                                        AutomationProperties.Name="Import a template" ToolTip="Import a template made in Curses (.cursestmp): its text style, font, box picture, sounds and avatar">
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE8B5;" FontFamily="{StaticResource IconFont}" FontSize="34" HorizontalAlignment="Center"
+                                                   Foreground="{DynamicResource AccentHoverBrush}" />
+                                        <TextBlock Text="Import a template" FontSize="13" Margin="0,10,0,0" HorizontalAlignment="Center" Foreground="{DynamicResource MutedBrush}" />
+                                        <TextBlock Text="or drop a .cursestmp file" FontFamily="{StaticResource SmallFont}" FontSize="11" Margin="0,4,0,0"
+                                                   HorizontalAlignment="Center" Foreground="{DynamicResource TertiaryBrush}" />
                                     </StackPanel>
                                 </Button>
                             </WrapPanel>
@@ -2237,6 +2249,118 @@
                                         </Grid>
                                     </Expander>
 
+                                    <!-- Avatar: a picture on the canvas; the active one takes its place while a sentence is written -->
+                                    <Expander Style="{StaticResource ObsSectionExpander}" Header="Avatar" Tag="{Binding Avatar, Mode=TwoWay}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="104" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="20" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.ColumnSpan="4" TextWrapping="Wrap" FontFamily="{StaticResource SmallFont}" FontSize="11" Foreground="{DynamicResource MutedBrush}"
+                                                       Text="A picture placed anywhere on the text template, over the box. While a sentence is being written, the base and active pictures take turns (like a mouth opening and closing), then the base picture stays. The text keeps clear of it." />
+
+                                            <!-- Common: where it is and how big -->
+                                            <TextBlock Grid.Row="1" Text="Position (px)" Style="{StaticResource ObsLabel}" />
+                                            <TextBox Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" Text="{Binding AvatarX}" KeyDown="NameBox_KeyDown" VerticalContentAlignment="Center"
+                                                     IsEnabled="{Binding Avatar}" AutomationProperties.Name="Avatar left" ToolTip="From the left edge of the text template" />
+                                            <TextBlock Grid.Row="1" Grid.Column="2" Text="," HorizontalAlignment="Center" Style="{StaticResource ObsLabel}" />
+                                            <TextBox Grid.Row="1" Grid.Column="3" Margin="0,10,0,0" Text="{Binding AvatarY}" KeyDown="NameBox_KeyDown" VerticalContentAlignment="Center"
+                                                     IsEnabled="{Binding Avatar}" AutomationProperties.Name="Avatar top" ToolTip="From the top edge of the text template" />
+                                            <TextBlock Grid.Row="2" Text="Size (px)" Style="{StaticResource ObsLabel}" />
+                                            <TextBox Grid.Row="2" Grid.Column="1" Margin="0,10,0,0" Text="{Binding AvatarWidth}" KeyDown="NameBox_KeyDown" VerticalContentAlignment="Center"
+                                                     IsEnabled="{Binding Avatar}" AutomationProperties.Name="Avatar width" ToolTip="Width (the picture fits inside, keeping its shape)" />
+                                            <TextBlock Grid.Row="2" Grid.Column="2" Text="×" HorizontalAlignment="Center" Style="{StaticResource ObsLabel}" />
+                                            <TextBox Grid.Row="2" Grid.Column="3" Margin="0,10,0,0" Text="{Binding AvatarHeight}" KeyDown="NameBox_KeyDown" VerticalContentAlignment="Center"
+                                                     IsEnabled="{Binding Avatar}" AutomationProperties.Name="Avatar height" ToolTip="Height (the picture fits inside, keeping its shape)" />
+
+                                            <!-- Base picture -->
+                                            <TextBlock Grid.Row="3" Grid.ColumnSpan="4" Text="Base picture" Style="{StaticResource ObsSection}" Margin="0,16,0,0" />
+                                            <TextBlock Grid.Row="4" Text="Picture" Style="{StaticResource ObsLabel}" />
+                                            <DockPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,10,0,0" IsEnabled="{Binding Avatar}">
+                                                <Button DockPanel.Dock="Left" Style="{StaticResource TintedButton}" FontSize="12" Padding="12,5" Content="Choose…"
+                                                        Command="{Binding DataContext.Obs.ChooseAvatarCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="base"
+                                                        AutomationProperties.Name="Choose the avatar picture" />
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="Remove"
+                                                        Command="{Binding DataContext.Obs.RemoveAvatarCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="base"
+                                                        AutomationProperties.Name="Remove the avatar picture" />
+                                                <TextBlock Text="{Binding AvatarImageText}" FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{DynamicResource MutedBrush}" />
+                                            </DockPanel>
+                                            <TextBlock Grid.Row="5" Text="Opacity" Style="{StaticResource ObsLabel}" />
+                                            <DockPanel Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="3" IsEnabled="{Binding Avatar}">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding AvatarOpacityText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="1" TickFrequency="0.05" Value="{Binding AvatarOpacity}"
+                                                        AutomationProperties.Name="Avatar opacity" />
+                                            </DockPanel>
+
+                                            <!-- Active picture -->
+                                            <TextBlock Grid.Row="6" Grid.ColumnSpan="4" Text="Active picture (while talking)" Style="{StaticResource ObsSection}" Margin="0,16,0,0" />
+                                            <TextBlock Grid.Row="7" Text="Picture" Style="{StaticResource ObsLabel}" />
+                                            <DockPanel Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,10,0,0" IsEnabled="{Binding Avatar}">
+                                                <Button DockPanel.Dock="Left" Style="{StaticResource TintedButton}" FontSize="12" Padding="12,5" Content="Choose…"
+                                                        Command="{Binding DataContext.Obs.ChooseAvatarCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="active"
+                                                        AutomationProperties.Name="Choose the active avatar picture" />
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="Remove"
+                                                        Command="{Binding DataContext.Obs.RemoveAvatarCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="active"
+                                                        AutomationProperties.Name="Remove the active avatar picture" />
+                                                <TextBlock Text="{Binding AvatarActiveImageText}" FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{DynamicResource MutedBrush}" />
+                                            </DockPanel>
+                                            <TextBlock Grid.Row="8" Text="Opacity" Style="{StaticResource ObsLabel}" />
+                                            <DockPanel Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="3" IsEnabled="{Binding Avatar}">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding AvatarActiveOpacityText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="1" TickFrequency="0.05" Value="{Binding AvatarActiveOpacity}"
+                                                        AutomationProperties.Name="Active avatar opacity" />
+                                            </DockPanel>
+                                            <TextBlock Grid.Row="9" Text="Transition" Style="{StaticResource ObsLabel}" ToolTip="How long each picture shows before the other takes its turn" />
+                                            <DockPanel Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="3" IsEnabled="{Binding Avatar}">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding AvatarTransitionText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="30" Maximum="1000" TickFrequency="10" Value="{Binding AvatarTransition}"
+                                                        AutomationProperties.Name="Avatar transition" ToolTip="How long each picture shows before the other takes its turn, while talking" />
+                                            </DockPanel>
+
+                                            <!-- Clearing, like the box -->
+                                            <TextBlock Grid.Row="10" Grid.ColumnSpan="4" Text="Clearing" Style="{StaticResource ObsSection}" Margin="0,16,0,0" />
+                                            <TextBlock Grid.Row="12" Text="Clear delay" Style="{StaticResource ObsLabel}" />
+                                            <DockPanel Grid.Row="12" Grid.Column="1" Grid.ColumnSpan="3" IsEnabled="{Binding Avatar}">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding AvatarClearDelayText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="60" TickFrequency="1" Value="{Binding AvatarClearDelay}"
+                                                        AutomationProperties.Name="Avatar clear delay" ToolTip="How long after the last sentence the avatar clears (0 = it always stays). It comes back with the next sentence." />
+                                            </DockPanel>
+                                            <TextBlock Grid.Row="11" Text="Clear duration" Style="{StaticResource ObsLabel}" />
+                                            <DockPanel Grid.Row="11" Grid.Column="1" Grid.ColumnSpan="3" IsEnabled="{Binding Avatar}">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding AvatarClearDurationText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="0" Maximum="2000" TickFrequency="50" Value="{Binding AvatarClearDuration}"
+                                                        AutomationProperties.Name="Avatar clear duration" ToolTip="How long the avatar takes to fade out" />
+                                            </DockPanel>
+                                            <Button Grid.Row="13" Grid.Column="1" Grid.ColumnSpan="3" HorizontalAlignment="Left" Margin="0,12,0,0" Style="{StaticResource TintedButton}"
+                                                    FontSize="12" Padding="12,5" IsEnabled="{Binding Avatar}"
+                                                    Command="{Binding DataContext.Obs.PlayDemoCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    AutomationProperties.Name="Try the avatar in the preview">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE768;" FontFamily="{StaticResource IconFont}" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBlock Text="Play in preview" />
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+                                    </Expander>
+
                                     <!-- Sounds -->
                                     <Expander Style="{StaticResource ObsSectionExpander}" Header="Sounds">
                                         <StackPanel>
@@ -2300,6 +2424,9 @@
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
                                             <TextBlock Text="Type" Style="{StaticResource ObsLabel}" Margin="0" />
                                             <ComboBox Grid.Column="1" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Background}"
@@ -2336,6 +2463,25 @@
                                             <ComboBox Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding ImageFit}"
                                                       ItemsSource="{Binding DataContext.Obs.ImageFits, RelativeSource={RelativeSource AncestorType=Window}}"
                                                       AutomationProperties.Name="Picture fit" Visibility="{Binding IsImageBackground, Converter={StaticResource Visibility}}" />
+                                            <!-- 9-slice frame: the picture's corners keep their size, its edges stretch -->
+                                            <TextBlock Grid.Row="6" Text="Corner size" Style="{StaticResource ObsLabel}"
+                                                       Visibility="{Binding IsSliceFit, Converter={StaticResource Visibility}}" />
+                                            <DockPanel Grid.Row="6" Grid.Column="1" Visibility="{Binding IsSliceFit, Converter={StaticResource Visibility}}">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding SliceSizeText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="1" Maximum="100" TickFrequency="1" Value="{Binding SliceSize}"
+                                                        AutomationProperties.Name="Frame corner size"
+                                                        ToolTip="How far the corners reach into the picture, in its own pixels. Those parts keep their size; the edges between them stretch." />
+                                            </DockPanel>
+                                            <TextBlock Grid.Row="7" Text="Frame scale" Style="{StaticResource ObsLabel}"
+                                                       Visibility="{Binding IsSliceFit, Converter={StaticResource Visibility}}" />
+                                            <DockPanel Grid.Row="7" Grid.Column="1" Visibility="{Binding IsSliceFit, Converter={StaticResource Visibility}}">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding SliceScaleText}" Width="60" Style="{StaticResource ObsValue}" />
+                                                <Slider Style="{StaticResource ObsSlider}" Minimum="0.5" Maximum="8" TickFrequency="0.5" Value="{Binding SliceScale}"
+                                                        AutomationProperties.Name="Frame scale" ToolTip="Draws the frame bigger; pixel art stays sharp" />
+                                            </DockPanel>
+                                            <TextBlock Grid.Row="8" Grid.Column="1" Margin="0,8,0,0" TextWrapping="Wrap" FontFamily="{StaticResource SmallFont}" FontSize="11"
+                                                       Foreground="{DynamicResource MutedBrush}" Visibility="{Binding IsSliceFit, Converter={StaticResource Visibility}}"
+                                                       Text="The frame is the box's border, so the Border section isn't used with it." />
                                         </Grid>
                                     </Expander>
 
@@ -2386,6 +2532,22 @@
                             </DockPanel>
                         </Grid>
                     </DockPanel>
+
+                    <!-- While a template file is dragged over the dialog -->
+                    <Border x:Name="ObsDropHint" Visibility="Collapsed" CornerRadius="12" Margin="-8" IsHitTestVisible="False"
+                            Background="{DynamicResource ScrimBrush}">
+                        <Grid>
+                            <Rectangle RadiusX="12" RadiusY="12" StrokeThickness="2" StrokeDashArray="4 3" Stroke="{DynamicResource AccentHoverBrush}" />
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE8B5;" FontFamily="{StaticResource IconFont}" FontSize="40" HorizontalAlignment="Center"
+                                           Foreground="{DynamicResource AccentHoverBrush}" />
+                                <TextBlock Text="Drop to import the template" FontSize="16" FontWeight="SemiBold" Margin="0,12,0,0" HorizontalAlignment="Center" />
+                                <TextBlock Text="A text template is made from it, with its font, box picture, sounds and avatar"
+                                           FontFamily="{StaticResource SmallFont}" FontSize="12" Margin="0,4,0,0" HorizontalAlignment="Center"
+                                           Foreground="{DynamicResource MutedBrush}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
                 </Grid>
             </Border>
         </Grid>

@@ -13,7 +13,7 @@ WalkTalk can also learn your voice: read a set of sentences aloud and it retrain
 - **Voice commands.** Say "Clean" to empty the fields, or "Send" / "Enter" to press Enter.
 - **Word hints.** Names and terms Whisper should spell exactly (usernames, games, jargon).
 - **Word replacements.** Search the words the model knows and write something else in their place: an abbreviation, slang, an emoji.
-- **OBS overlay.** Shows each sentence on your stream through OBS Browser Sources, with as many text templates as you like, each styled your way: size, box (auto width/height, padding), font (any font on your PC, a font file you add, or Google Fonts you search and install), weight, size, color, letter case, alignment, line height, text shadow, outline, background (color, gradient or picture), border, text animation (character or word reveal, intervals, clear animation, replace the previous sentence) and sounds (typing, new sentence, show, hide, built-in or your own files, each with its volume), with a live preview.
+- **OBS overlay.** Shows each sentence on your stream through OBS Browser Sources, with as many text templates as you like, each styled your way: size, box (auto width/height, padding), font (any font on your PC, a font file you add, or Google Fonts you search and install), weight, size, color, letter case, alignment, line height, text shadow, outline, background (color, gradient, picture, or a 9-slice frame picture whose corners keep their size), border, an avatar (a picture placed anywhere that swaps to an active picture while a sentence is written, with opacity, duration and transition), text animation (character or word reveal, intervals, clear animation, replace the previous sentence) and sounds (typing, new sentence, show, hide, built-in or your own files, each with its volume), with a live preview.
 - **Read aloud (TTS).** Optionally reads each sentence back with a natural Kokoro voice, also offline.
 - **Voice training.** Retrains the model on your recordings so it understands your accent better (see below).
 - **Dark and light themes.**
@@ -56,6 +56,8 @@ Click **Stop** when you are done: the model is unloaded to free the graphics car
 1. Click the OBS logo next to the theme button, then **+** to add a text template.
 2. In OBS: **Sources**, **+**, **Browser**. Paste the text template's address from WalkTalk (`http://127.0.0.1:7480/c/…`) and set Width and Height to its size.
 3. Style it in WalkTalk; the preview and OBS update as you change it. Each text template has its own switch, so you can keep several looks and turn them on as needed.
+
+Templates made in Curses (`.cursestmp` files) can be brought in: click **Import a template**, or drop the file on the OBS overlay window. Each text element becomes a text template, with its size, text style, font, box picture, sounds and timing; an image element becomes its avatar.
 
 The overlay is served from your own PC only (127.0.0.1), on port 7480 unless you change it at the bottom of the text template list. A Google font must be installed in WalkTalk to appear in OBS; installed fonts and background pictures are kept, so the overlay also works offline.
 

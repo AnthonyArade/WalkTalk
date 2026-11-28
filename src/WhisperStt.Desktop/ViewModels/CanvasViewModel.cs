@@ -113,7 +113,7 @@ public sealed class CanvasViewModel : ObservableObject
             bitmap.EndInit();
             return new ImageBrush(bitmap)
             {
-                Stretch = Style.ImageFit switch { ImageFit.Contain => Stretch.Uniform, ImageFit.Stretch => Stretch.Fill, _ => Stretch.UniformToFill }
+                Stretch = Style.ImageFit switch { ImageFit.Contain => Stretch.Uniform, ImageFit.Stretch or ImageFit.Slice => Stretch.Fill, _ => Stretch.UniformToFill }
             };
         }
         catch (Exception ex) when (ex is IOException or NotSupportedException or UriFormatException)
@@ -180,6 +180,7 @@ public sealed class CanvasViewModel : ObservableObject
             OnPropertyChanged(nameof(IsColorBackground));
             OnPropertyChanged(nameof(IsGradientBackground));
             OnPropertyChanged(nameof(IsImageBackground));
+            OnPropertyChanged(nameof(IsSliceFit));
         }
     }
 
@@ -190,8 +191,24 @@ public sealed class CanvasViewModel : ObservableObject
     public string BackgroundColor2 { get => Style.BackgroundColor2; set => SetColor(Style.BackgroundColor2, value, v => Style.BackgroundColor2 = v); }
     public double GradientAngle { get => Style.GradientAngle; set => Set(Style.GradientAngle, Math.Round(value), v => Style.GradientAngle = v, nameof(GradientAngleText)); }
     public string GradientAngleText => $"{GradientAngle:0}°";
-    public ImageFit ImageFit { get => Style.ImageFit; set => Set(Style.ImageFit, value, v => Style.ImageFit = v); }
+    public ImageFit ImageFit
+    {
+        get => Style.ImageFit;
+        set
+        {
+            Set(Style.ImageFit, value, v => Style.ImageFit = v);
+            OnPropertyChanged(nameof(IsSliceFit));
+        }
+    }
+
     public string ImageText => Style.BackgroundImage.Length == 0 ? "No picture chosen" : "Picture chosen";
+
+    // The 9-slice frame: how far the corners reach into the picture, and how much bigger it is drawn.
+    public bool IsSliceFit => IsImageBackground && ImageFit == ImageFit.Slice;
+    public double SliceSize { get => Style.SliceSize; set => Set(Style.SliceSize, Math.Round(Math.Clamp(value, 1, 500)), v => Style.SliceSize = v, nameof(SliceSizeText)); }
+    public string SliceSizeText => $"{SliceSize:0} px";
+    public double SliceScale { get => Style.SliceScale; set => Set(Style.SliceScale, Math.Round(Math.Clamp(value, 0.5, 8) * 2) / 2, v => Style.SliceScale = v, nameof(SliceScaleText)); }
+    public string SliceScaleText => $"{SliceScale:0.#}×";
 
     // A picture was copied for this canvas (or removed).
     public void SetImage(string name)
@@ -222,6 +239,37 @@ public sealed class CanvasViewModel : ObservableObject
     public ClearAnimation ClearAnimation { get => Style.ClearAnimation; set => Set(Style.ClearAnimation, value, v => Style.ClearAnimation = v); }
     public double ClearDuration { get => Style.ClearDuration; set => Set(Style.ClearDuration, Math.Round(value / 50) * 50, v => Style.ClearDuration = v, nameof(ClearDurationText)); }
     public string ClearDurationText => $"{ClearDuration:0} ms";
+
+    // -- avatar: a picture placed on the canvas; the active one shows while a sentence is written
+    public bool Avatar { get => Style.Avatar; set => Set(Style.Avatar, value, v => Style.Avatar = v); }
+    public int AvatarX { get => Style.AvatarX; set => Set(Style.AvatarX, Math.Clamp(value, -7680, 7680), v => Style.AvatarX = v); }
+    public int AvatarY { get => Style.AvatarY; set => Set(Style.AvatarY, Math.Clamp(value, -4320, 4320), v => Style.AvatarY = v); }
+    public int AvatarWidth { get => Style.AvatarWidth; set => Set(Style.AvatarWidth, Math.Clamp(value, 1, 7680), v => Style.AvatarWidth = v); }
+    public int AvatarHeight { get => Style.AvatarHeight; set => Set(Style.AvatarHeight, Math.Clamp(value, 1, 4320), v => Style.AvatarHeight = v); }
+    public double AvatarOpacity { get => Style.AvatarOpacity; set => Set(Style.AvatarOpacity, Math.Round(Math.Clamp(value, 0, 1), 2), v => Style.AvatarOpacity = v, nameof(AvatarOpacityText)); }
+    public string AvatarOpacityText => $"{AvatarOpacity:P0}";
+    public double AvatarActiveOpacity { get => Style.AvatarActiveOpacity; set => Set(Style.AvatarActiveOpacity, Math.Round(Math.Clamp(value, 0, 1), 2), v => Style.AvatarActiveOpacity = v, nameof(AvatarActiveOpacityText)); }
+    public string AvatarActiveOpacityText => $"{AvatarActiveOpacity:P0}";
+    // Like the box: how long after the last sentence the avatar clears (0 = it stays), and how long it takes to fade.
+    public double AvatarClearDelay { get => Style.AvatarClearDelaySeconds; set => Set(Style.AvatarClearDelaySeconds, Math.Round(Math.Max(0, value)), v => Style.AvatarClearDelaySeconds = v, nameof(AvatarClearDelayText)); }
+    public string AvatarClearDelayText => AvatarClearDelay == 0 ? "Never" : $"{AvatarClearDelay:0} s";
+    public double AvatarClearDuration { get => Style.AvatarClearDuration; set => Set(Style.AvatarClearDuration, Math.Round(value / 50) * 50, v => Style.AvatarClearDuration = v, nameof(AvatarClearDurationText)); }
+    public string AvatarClearDurationText => $"{AvatarClearDuration:0} ms";
+    public double AvatarTransition { get => Style.AvatarTransition; set => Set(Style.AvatarTransition, Math.Max(30, Math.Round(value / 10) * 10), v => Style.AvatarTransition = v, nameof(AvatarTransitionText)); }
+    public string AvatarTransitionText => $"{AvatarTransition:0} ms";
+    public string AvatarImageText => Style.AvatarImage.Length == 0 ? "No picture chosen" : "Picture chosen";
+    public string AvatarActiveImageText => Style.AvatarActiveImage.Length == 0 ? "No picture chosen" : "Picture chosen";
+
+    // One of the avatar's pictures ("base" or "active") was copied for this canvas, or removed ("").
+    public void SetAvatarImage(string slot, string name)
+    {
+        if (slot == "active")
+            Style.AvatarActiveImage = name;
+        else
+            Style.AvatarImage = name;
+        Refresh();
+        _changed(this, true);
+    }
 
     // -- sounds
     private IReadOnlyList<SoundViewModel>? _sounds;

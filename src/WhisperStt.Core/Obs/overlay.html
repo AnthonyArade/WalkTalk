@@ -9,6 +9,7 @@
   /* The canvas is the Browser Source's area; the box inside it carries the background, border and padding. */
   #canvas {
     position: absolute; left: 0; top: 0; box-sizing: border-box;
+    /* padding: room kept for the avatar when the box moves aside for it */
     display: flex; flex-direction: column; overflow: hidden; transform-origin: 0 0;
   }
   #box {
@@ -17,6 +18,10 @@
     transition-property: opacity, transform; transition-timing-function: ease;
   }
   #box.empty { opacity: 0; }
+  /* The avatar: placed anywhere on the canvas, over the box. Its two pictures take turns while talking. */
+  #avatar { position: absolute; display: none; pointer-events: none; z-index: 2; transition-property: opacity; transition-timing-function: ease; }
+  #avatar img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain;
+                opacity: 0; }
   /* How the box leaves when it is cleared */
   #box.leave-fade { opacity: 0; }
   #box.leave-slide-up { opacity: 0; transform: translateY(-40%); }
@@ -28,8 +33,12 @@
   .bit { display: inline; white-space: pre-wrap; }
   .bit.wait { visibility: hidden; }
   .bit.fade.on { animation: wt-fade var(--reveal) ease-out both; }
-  .bit.pop.on { display: inline-block; animation: wt-pop var(--reveal) cubic-bezier(.2,1.6,.4,1) both; }
-  .bit.rise.on { display: inline-block; animation: wt-rise var(--reveal) ease-out both; }
+  /* Pop and rise move each piece, which needs inline-block from the start (so nothing re-wraps as they appear), and
+     letters kept together in their word (so a line never breaks between two letters). */
+  .bit.pop, .bit.rise { display: inline-block; }
+  .word, .word > .bit { white-space: nowrap; }
+  .bit.pop.on { animation: wt-pop var(--reveal) cubic-bezier(.2,1.6,.4,1) both; }
+  .bit.rise.on { animation: wt-rise var(--reveal) ease-out both; }
   @keyframes wt-fade { from { opacity: 0; } to { opacity: 1; } }
   @keyframes wt-pop { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: scale(1); } }
   @keyframes wt-rise { from { opacity: 0; transform: translateY(0.35em); } to { opacity: 1; transform: translateY(0); } }
@@ -39,7 +48,7 @@
 </style>
 </head>
 <body>
-<div id="canvas"><div id="box" class="empty"></div></div>
+<div id="canvas"><div id="box" class="empty"></div><div id="avatar"><img id="avatarBase" alt=""><img id="avatarActive" alt=""></div></div>
 <script>
   const id = location.pathname.split('/').filter(Boolean).pop();
   const preview = new URLSearchParams(location.search).has('preview');
@@ -133,7 +142,7 @@
   function applyStyle() {
     if (!style || style.width === undefined) return;
     Object.assign(canvas.style, {
-      width: style.width + 'px', height: style.height + 'px',
+      width: style.width + 'px', height: style.height + 'px', padding: style.canvasPadding || '0',
       justifyContent: place[style.verticalAlign],   // where the box sits vertically
       alignItems: style.autoWidth ? place[style.textAlign] : 'stretch',
     });
@@ -142,7 +151,9 @@
       height: style.autoHeight ? 'auto' : '100%',
       justifyContent: place[style.verticalAlign],   // where the text sits inside a full-height box
       padding: style.padding, background: style.background,
-      border: style.border, borderRadius: style.borderRadius + 'px',
+      // border-image after border: the border shorthand resets it.
+      border: style.border, borderImage: style.borderImage || 'none', imageRendering: style.imageRendering || 'auto',
+      borderRadius: style.borderRadius + 'px',
       fontFamily: style.fontFamily, fontSize: style.fontSize + 'px', fontWeight: style.fontWeight,
       color: style.color, textTransform: style.textTransform, textAlign: style.textAlign,
       lineHeight: style.lineHeight, textShadow: style.textShadow,
@@ -152,8 +163,86 @@
     });
     box.style.setProperty('--reveal', Math.max(80, Math.min(400, (style.characterInterval || 35) * 6)) + 'ms');
     for (const s of Object.values(style.sounds || {})) if (s.kind === 'file') loadFile(s.url);
+    applyAvatar();
     fit();
     if (showingSamples || (preview && !box.children.length)) showSamples();
+  }
+
+  // ---------- avatar ----------
+  // The base picture, until a sentence comes: then the base and active pictures take turns (a mouth opening and
+  // closing), one every "transition" ms, while it is written. Like the box, the avatar clears "clearDelay" seconds
+  // after the last sentence (fading over "clearDuration" ms) and comes back with the next; with no delay it stays.
+  const avatar = document.getElementById('avatar');
+  const avatarBase = document.getElementById('avatarBase'), avatarActive = document.getElementById('avatarActive');
+  let talking = false, flapTimer = null, mouthOpen = false;
+  let avatarShown = false, avatarClearTimer = null;
+
+  function revealAvatar() {
+    clearTimeout(avatarClearTimer);
+    avatarShown = true;
+    avatar.style.transitionDuration = '0ms';   // it comes back at once
+    avatar.style.opacity = 1;
+  }
+
+  function clearAvatar() {
+    const a = style && style.avatar;
+    clearTimeout(avatarClearTimer);
+    if (!a || !a.clearDelay) return;            // no delay: it stays
+    avatarShown = false;
+    avatar.style.transitionDuration = (a.clearDuration || 0) + 'ms';
+    avatar.style.opacity = 0;
+  }
+
+  function clearAvatarLater() {
+    const a = style && style.avatar;
+    clearTimeout(avatarClearTimer);
+    if (a && a.clearDelay && !(preview && showingSamples)) avatarClearTimer = setTimeout(clearAvatar, a.clearDelay * 1000);
+  }
+
+  function setPicture(img, url) {
+    if (!url) { img.removeAttribute('src'); img.style.display = 'none'; return; }
+    if (img.getAttribute('src') !== url) img.src = url;
+    img.style.display = 'block';
+  }
+
+  function applyAvatar() {
+    const a = style.avatar;
+    if (!a || !a.on) { avatar.style.display = 'none'; return; }
+    Object.assign(avatar.style, { display: 'block', left: a.x + 'px', top: a.y + 'px', width: a.width + 'px', height: a.height + 'px' });
+    setPicture(avatarBase, a.baseUrl);
+    setPicture(avatarActive, a.activeUrl);
+    if (talking) startFlapping(); // a new rhythm applies at once
+    if (!a.clearDelay) avatarShown = true;
+    avatar.style.transitionDuration = '0ms';
+    avatar.style.opacity = avatarShown ? 1 : 0;
+    showAvatar();
+  }
+
+  function showAvatar() {
+    const a = style && style.avatar;
+    if (!a || !a.on) return;
+    const active = talking && mouthOpen && !!a.activeUrl;   // without an active picture, the base one simply stays
+    avatarBase.style.opacity = active ? 0 : a.baseOpacity;
+    avatarActive.style.opacity = active ? a.activeOpacity : 0;
+  }
+
+  // The two pictures swap at once, in turn, every "transition" ms, starting with the active one.
+  function startFlapping() {
+    clearInterval(flapTimer);
+    mouthOpen = true;
+    const every = Math.max(30, (style && style.avatar && style.avatar.transition) || 150);
+    flapTimer = setInterval(() => { mouthOpen = !mouthOpen; showAvatar(); }, every);
+  }
+
+  function talk() {
+    revealAvatar();
+    if (!talking) { talking = true; startFlapping(); }
+    showAvatar();
+  }
+  // The writing is done: the base picture stays, until the avatar clears.
+  function stopTalking() {
+    talking = false; mouthOpen = false; clearInterval(flapTimer); showAvatar();
+    clearAvatarLater();
   }
 
   // In the preview the canvas shrinks to fit the window; in OBS it is drawn at its real size.
@@ -166,12 +255,20 @@
 
   function line(text) { const div = document.createElement('div'); div.className = 'line'; div.textContent = text; return div; }
 
+  // Older sentences that no longer fit in the box go, whole: otherwise the top one would show cut in half.
+  function trimOverflow() {
+    while (box.children.length > 1 && box.scrollHeight > box.clientHeight + 1) box.firstElementChild.remove();
+  }
+
   // The preview, while nothing has been said: the samples, shown at once.
   function showSamples() {
     if (queue.length || working) return;
     showingSamples = true;
+    clearing++;              // a clear still fading out mustn't empty the samples
+    revealAvatar();
     box.className = '';
     box.replaceChildren(...samples.slice(0, style ? style.lines : 2).map(line));
+    trimOverflow();
   }
 
   // ---------- showing sentences ----------
@@ -183,9 +280,12 @@
   async function run() {
     working = true;
     clearTimeout(hideTimer);
+    talk();
     while (queue.length) {
       const text = queue.shift();
       if (showingSamples) { showingSamples = false; box.replaceChildren(); box.className = 'empty'; }
+      // The box was fading out: finish that at once, so the end of the fade doesn't empty the new sentence.
+      if (box.className.startsWith('leave')) { clearing++; box.replaceChildren(); box.className = 'empty'; }
       const wasEmpty = box.classList.contains('empty') || !box.children.length;
       if (style.replacePrevious && !wasEmpty) await clearBox(false);
       // Too many sentences: the oldest fades out first.
@@ -204,25 +304,35 @@
       }
       play('sentence');
       if (style.animate) await reveal(div, text);
-      else div.textContent = text;
+      else { div.textContent = text; trimOverflow(); }
       if (queue.length && style.animate) await sleep(style.sentenceInterval);
     }
     working = false;
+    stopTalking();
     hideLater();
   }
 
   // Reveals a sentence a character or a word at a time. Every piece is laid out first (hidden), so the lines
   // wrap where they will end up and nothing jumps while it types.
   async function reveal(div, text) {
-    const pieces = style.revealUnit === 'word' ? text.split(/(\s+)/).filter(p => p.length) : Array.from(text);
     const effect = style.revealEffect;
-    const spans = pieces.map(p => {
+    const spans = [];
+    function bit(parent, piece) {
       const s = document.createElement('span');
-      s.className = 'bit wait' + (effect === 'appear' ? '' : ' ' + effect);
-      s.textContent = p;
-      div.appendChild(s);
-      return s;
-    });
+      // Spaces take no part in the effect: they stay ordinary text where lines can break.
+      s.className = 'bit wait' + (effect === 'appear' || !piece.trim() ? '' : ' ' + effect);
+      s.textContent = piece;
+      parent.appendChild(s);
+      spans.push(s);
+    }
+    for (const token of text.split(/(\s+)/).filter(p => p.length)) {
+      if (style.revealUnit === 'word' || !token.trim()) { bit(div, token); continue; }
+      const word = document.createElement('span');
+      word.className = 'word';
+      div.appendChild(word);
+      for (const letter of Array.from(token)) bit(word, letter);
+    }
+    trimOverflow(); // every piece is laid out (hidden) by now, so the room it needs is known
     for (let i = 0; i < spans.length; i++) {
       const s = spans[i], blank = !s.textContent.trim();
       s.classList.remove('wait'); s.classList.add('on');
@@ -234,12 +344,16 @@
   }
 
   // Empties the box with the clear animation.
+  // A newer sentence (or the preview's samples) can take over while it fades: then the box isn't emptied.
+  let clearing = 0;
   async function clearBox(toEmpty) {
     const kind = style.clearAnimation;
+    const mine = ++clearing;
     play('hide');
     if (kind !== 'none' && style.clearDuration > 0) {
       box.className = 'leave-' + kind;
       await sleep(style.clearDuration);
+      if (mine !== clearing) return;
     }
     box.replaceChildren();
     box.className = toEmpty ? 'empty' : '';
@@ -263,7 +377,7 @@
   const events = new EventSource('/events?c=' + encodeURIComponent(id));
   events.addEventListener('style', e => { style = JSON.parse(e.data); applyStyle(); });
   events.addEventListener('line', e => receive(JSON.parse(e.data).text));
-  events.addEventListener('clear', () => { queue.length = 0; clearBox(true); });
+  events.addEventListener('clear', () => { queue.length = 0; clearBox(true); clearAvatar(); });
   events.addEventListener('fonts', () => { document.getElementById('fonts').href = '/fonts.css?' + Date.now(); });
   addEventListener('resize', fit);
 </script>

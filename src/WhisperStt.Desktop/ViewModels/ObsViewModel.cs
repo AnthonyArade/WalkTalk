@@ -93,6 +93,12 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         ChooseSoundCommand = new RelayCommand<SoundViewModel>(ChooseSound);
         PlaySoundCommand = new RelayCommand<SoundViewModel>(s => PlayRequested?.Invoke(s.Slot));
         PlayDemoCommand = new RelayCommand(() => DemoRequested?.Invoke());
+        ChooseAvatarCommand = new RelayCommand<string>(ChooseAvatar);
+        RemoveAvatarCommand = new RelayCommand<string>(slot =>
+        {
+            if (Editing is { } c) { OverlayImages.RemoveAvatar(c.Id, slot); c.SetAvatarImage(slot, ""); }
+        });
+        ImportTemplateCommand = new RelayCommand(ImportTemplate);
         SoundViewModel.FileWanted += ChooseSound;
         UpdateServer();
     }
@@ -113,6 +119,9 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
     public ICommand ChooseSoundCommand { get; }
     public ICommand PlaySoundCommand { get; }
     public ICommand PlayDemoCommand { get; }
+    public ICommand ChooseAvatarCommand { get; }
+    public ICommand RemoveAvatarCommand { get; }
+    public ICommand ImportTemplateCommand { get; }
 
     // The preview plays these (it holds the page that makes the sounds and animations).
     public event Action<string>? PlayRequested;
@@ -151,7 +160,10 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         [new(BackgroundType.None, "None (transparent)"), new(BackgroundType.Color, "Color"), new(BackgroundType.Gradient, "Gradient"), new(BackgroundType.Image, "Picture")];
 
     public IReadOnlyList<Choice<ImageFit>> ImageFits { get; } =
-        [new(ImageFit.Cover, "Fill (crop)"), new(ImageFit.Contain, "Fit (whole picture)"), new(ImageFit.Stretch, "Stretch"), new(ImageFit.Tile, "Tile")];
+    [
+        new(ImageFit.Cover, "Fill (crop)"), new(ImageFit.Contain, "Fit (whole picture)"), new(ImageFit.Stretch, "Stretch"), new(ImageFit.Tile, "Tile"),
+        new(ImageFit.Slice, "Frame (9-slice: corners keep their size)")
+    ];
 
     public bool IsOpen
     {
@@ -254,6 +266,7 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         _server?.RemoveCanvas(canvas.Id);
         OverlayImages.Remove(canvas.Id);
         OverlayImages.RemoveSounds(canvas.Id);
+        OverlayImages.RemoveAvatars(canvas.Id);
         OverlayImages.RemoveThumbnail(canvas.Id);
         Editing = null;
         OnPropertyChanged(nameof(AnyOn));
@@ -272,6 +285,7 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
             property.SetValue(canvas.Style, property.GetValue(defaults));
         OverlayImages.Remove(canvas.Id);
         OverlayImages.RemoveSounds(canvas.Id);
+        OverlayImages.RemoveAvatars(canvas.Id);
         canvas.Refresh();
         OnCanvasChanged(canvas, true);
     }
@@ -329,6 +343,107 @@ public sealed class ObsViewModel : ObservableObject, IDisposable
         {
             Status = $"Couldn't use that picture: {ex.Message}";
         }
+    }
+
+    // -- avatar pictures
+
+    private void ChooseAvatar(string slot)
+    {
+        if (Editing is not { } canvas)
+            return;
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = slot == "active" ? "Avatar picture while talking" : "Avatar picture",
+            Filter = "Pictures|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp"
+        };
+        if (dialog.ShowDialog() == true)
+            SetAvatarImage(canvas, slot, dialog.FileName);
+    }
+
+    // Separate from the dialog so it can be tested.
+    public bool SetAvatarImage(CanvasViewModel canvas, string slot, string path)
+    {
+        try
+        {
+            canvas.SetAvatarImage(slot, OverlayImages.ImportAvatar(canvas.Id, slot, path));
+            if (!canvas.Avatar)
+                canvas.Avatar = true; // choosing a picture means wanting the avatar
+            Status = "";
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Status = $"Couldn't use that picture: {ex.Message}";
+            return false;
+        }
+    }
+
+    // -- templates made in Curses (.cursestmp), from the button or dropped on the dialog
+
+    public static bool CanImport(string path) => CursesTemplate.IsTemplate(path);
+
+    private void ImportTemplate()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Import a template",
+            Filter = "Curses templates|*.cursestmp",
+            Multiselect = true
+        };
+        if (dialog.ShowDialog() == true)
+            ImportTemplates(dialog.FileNames);
+    }
+
+    // Adds a text template for each text element in the files, and opens the last one. Returns how many were added.
+    public int ImportTemplates(IEnumerable<string> paths)
+    {
+        var added = new List<CanvasViewModel>();
+        var notes = new List<string>();
+        var problems = new List<string>();
+        var fontsAdded = false;
+        foreach (var path in paths.Where(CanImport))
+        {
+            try
+            {
+                var import = CursesTemplate.Import(path);
+                fontsAdded |= import.FontsAdded;
+                notes.AddRange(import.Notes);
+                foreach (var style in import.Templates)
+                {
+                    var name = style.Name;
+                    for (int n = 2; Canvases.Any(c => c.Name == style.Name); n++)
+                        style.Name = $"{name} {n}";
+                    var canvas = Wrap(style);
+                    Canvases.Add(canvas);
+                    _server?.SetCanvas(canvas.Style, imageChanged: true);
+                    added.Add(canvas);
+                }
+            }
+            catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                problems.Add($"{Path.GetFileName(path)}: {ex.Message}");
+            }
+        }
+        if (fontsAdded)
+        {
+            RefreshFamilies();
+            _server?.FontsChanged();
+        }
+        if (added.Count > 0)
+        {
+            OnPropertyChanged(nameof(AnyOn));
+            UpdateServer();
+            _changed();
+            Editing = added[^1];
+        }
+        var summary = added.Count switch
+        {
+            0 => "",
+            1 => $"Imported \"{added[0].Name}\".",
+            var n => $"Imported {n} text templates."
+        };
+        Status = string.Join(" ", new[] { summary }.Concat(problems.Select(p => $"Couldn't import {p}")).Concat(notes).Where(s => s.Length > 0));
+        return added.Count;
     }
 
     public void WriteTo(AppState state)

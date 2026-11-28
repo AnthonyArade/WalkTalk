@@ -21,6 +21,7 @@ using WhisperStt.Desktop.ViewModels;
 //   dialogs    opens every dialog, closes them with a click outside, and opens the microphone for a moment
 //   train      a full training (about 10 min)
 //   worc       says the hardest sentence again, reviews it and teaches it (needs a "…orcestershire…" recording)
+//   import     imports a Curses template (args[4]: the .cursestmp file), adds an avatar and plays it in the preview
 public static class Program
 {
     [STAThread]
@@ -48,6 +49,8 @@ public static class Program
         // The OBS check runs on its own port, so a WalkTalk already serving the overlay on 7480 is left alone.
         if (args.Length > 3 && args[3] is "obs" or "picker")
             File.WriteAllText(StateStore.FilePath, "{ \"ObsPort\": 7491 }");
+        if (args.Length > 3 && args[3] == "import")
+            File.WriteAllText(StateStore.FilePath, "{ \"ObsPort\": 7493 }");
         File.Delete(PersonalModel.CandidatePath);
         // The stream check: a stand-in for Twitch's API that says live or offline, a made-up sign-in, and an
         // OBS text template switched on (on its own port).
@@ -201,6 +204,240 @@ public static class Program
                     Console.WriteLine($"font file served: {served.StatusCode} {served.Content.Headers.ContentType} {served.Content.Headers.ContentLength} bytes");
                     host.Close();
                     obsVm.IsOpen = false;
+                    window.Closed += (_, _) => app.Shutdown();
+                    window.Close();
+                    return;
+                }
+                if (args.Length > 4 && args[3] == "import")
+                {
+                    // ---- a Curses template imported as a text template, then an avatar added to it and played
+                    var obs = vm.Obs;
+                    obs.OpenCommand.Execute(null);
+                    await Task.Delay(700);
+                    Shot("i1-list.png");
+                    var drop = (FrameworkElement)window.FindName("ObsDropHint");
+                    drop.Visibility = Visibility.Visible;
+                    await Task.Delay(200);
+                    Shot("i1b-drop-hint.png");
+                    drop.Visibility = Visibility.Collapsed;
+                    Console.WriteLine($"can import: .cursestmp {ObsViewModel.CanImport(args[4])}, .png {ObsViewModel.CanImport("x.png")}");
+                    Console.WriteLine($"not a template: {obs.ImportTemplates([Path.Combine(sandbox, "beep.cursestmp")])} added | {obs.Status}");
+                    File.WriteAllBytes(Path.Combine(sandbox, "junk.cursestmp"), [1, 2, 3, 4, 5, 200, 7]);
+                    Console.WriteLine($"junk file: {obs.ImportTemplates([Path.Combine(sandbox, "junk.cursestmp")])} added | {obs.Status}");
+
+                    var added = obs.ImportTemplates([args[4]]);
+                    var t = obs.Editing!;
+                    var s = t.Style;
+                    Console.WriteLine($"imported {added}: \"{t.Name}\" {s.Width}x{s.Height} | status: {obs.Status}");
+                    Console.WriteLine($"  text: font \"{s.FontFamily}\" (in list {obs.Families.Contains(s.FontFamily)}) {s.FontSize}px w{s.FontWeight} {s.Color} align {s.HorizontalAlign}/{s.VerticalAlign} auto {s.AutoWidth}/{s.AutoHeight} pad {s.PaddingX}");
+                    Console.WriteLine($"  box: {s.Background} {s.ImageFit} slice {s.SliceSize}x{s.SliceScale} picture \"{s.BackgroundImage}\" border {s.Border}");
+                    Console.WriteLine($"  animation: {s.Animate} {s.CharacterInterval}/{s.WordPause}/{s.SentenceInterval} ms, clear after {s.HideAfterSeconds}s in {s.ClearDuration}ms");
+                    Console.WriteLine($"  typing sound: {s.TypingSound.Kind} \"{s.TypingSound.File}\" vol {s.TypingSound.Volume}");
+                    var preview = (Microsoft.Web.WebView2.Wpf.WebView2)window.FindName("ObsPreview");
+                    for (int i = 0; i < 40 && preview.CoreWebView2 is null; i++)
+                        await Task.Delay(250);
+                    await Task.Delay(2000);
+                    Shot("i2-imported.png");
+
+                    // an avatar: two faces drawn here, mouth closed and open
+                    string Face(string name, bool open)
+                    {
+                        var path = Path.Combine(sandbox, name);
+                        var bmp = new RenderTargetBitmap(96, 96, 96, 96, PixelFormats.Pbgra32);
+                        var dv = new DrawingVisual();
+                        using (var dc = dv.RenderOpen())
+                        {
+                            dc.DrawEllipse(Brushes.Gold, new Pen(Brushes.Black, 3), new Point(48, 48), 44, 44);
+                            dc.DrawEllipse(Brushes.Black, null, new Point(33, 38), 5, 7);
+                            dc.DrawEllipse(Brushes.Black, null, new Point(63, 38), 5, 7);
+                            if (open) dc.DrawEllipse(Brushes.DarkRed, new Pen(Brushes.Black, 2), new Point(48, 68), 14, 11);
+                            else dc.DrawLine(new Pen(Brushes.Black, 3), new Point(34, 68), new Point(62, 68));
+                        }
+                        bmp.Render(dv);
+                        var enc = new PngBitmapEncoder();
+                        enc.Frames.Add(BitmapFrame.Create(bmp));
+                        using (var file = File.Create(path)) enc.Save(file);
+                        return path;
+                    }
+                    Console.WriteLine($"avatar before: on {t.Avatar}");
+                    Console.WriteLine($"base picture set {obs.SetAvatarImage(t, "base", args.Length > 6 ? args[5] : Face("closed.png", false))} -> on {t.Avatar} \"{s.AvatarImage}\" ({t.AvatarImageText})");
+                    Console.WriteLine($"active picture set {obs.SetAvatarImage(t, "active", args.Length > 6 ? args[6] : Face("open.png", true))} -> \"{s.AvatarActiveImage}\" ({t.AvatarActiveImageText})");
+                    Console.WriteLine($"not a picture: {obs.SetAvatarImage(t, "base", Path.Combine(sandbox, "junk.cursestmp"))} | {obs.Status}");
+                    t.AvatarX = 400; t.AvatarY = 20; t.AvatarWidth = 90; t.AvatarHeight = 90;
+                    t.AvatarOpacity = 0.8; t.AvatarActiveOpacity = 1; t.AvatarClearDelay = 3; t.AvatarClearDuration = 300; t.AvatarTransition = 120;
+                    t.AvatarWidth = 0; // clamped
+                    Console.WriteLine($"avatar: {t.AvatarX},{t.AvatarY} {t.AvatarWidth}x{t.AvatarHeight} opacity {t.AvatarOpacityText}/{t.AvatarActiveOpacityText} clear {t.AvatarClearDelayText} in {t.AvatarClearDurationText} {t.AvatarTransitionText}");
+                    t.AvatarWidth = 90;
+                    using var http = new System.Net.Http.HttpClient();
+                    var port = obs.PortText;
+                    foreach (var url in new[] { $"/avatar/{t.Id}/base", $"/avatar/{t.Id}/active", $"/avatar/{t.Id}/other", $"/bg/{t.Id}", $"/sound/{t.Id}/typing" })
+                    {
+                        var r = await http.GetAsync($"http://127.0.0.1:{port}{url}");
+                        Console.WriteLine($"  {url}: {(int)r.StatusCode} {r.Content.Headers.ContentType} {r.Content.Headers.ContentLength}");
+                    }
+
+                    // open the Avatar section so it shows in the screenshot
+                    Expander? Section(string header)
+                    {
+                        var stack = new Stack<DependencyObject>([window]);
+                        while (stack.Count > 0)
+                        {
+                            var node = stack.Pop();
+                            if (node is Expander ex && Equals(ex.Header, header)) return ex;
+                            for (int c = 0; c < VisualTreeHelper.GetChildrenCount(node); c++) stack.Push(VisualTreeHelper.GetChild(node, c));
+                        }
+                        return null;
+                    }
+                    var avatarSection = Section("Avatar");
+                    if (avatarSection is not null) { avatarSection.IsExpanded = true; await Task.Delay(300); avatarSection.BringIntoView(); }
+                    await Task.Delay(1500);
+                    async Task<string> Opacities() => await preview.CoreWebView2.ExecuteScriptAsync(
+                        "JSON.stringify([getComputedStyle(avatarBase).opacity, getComputedStyle(avatarActive).opacity, getComputedStyle(avatar).display, getComputedStyle(box).borderImageSource.slice(0, 30), box.offsetWidth + 'x' + box.offsetHeight])");
+                    Console.WriteLine($"page before talking (base, active, display, frame, box): {await Opacities()}");
+                    Shot("i3-avatar.png");
+                    obs.PlayDemoCommand.Execute(null);
+                    await Task.Delay(500);
+                    // with a turn every 120 ms, sampling every 40 ms should see both pictures several times
+                    var turns = new List<string>();
+                    for (int i = 0; i < 25; i++)
+                    {
+                        var o = await preview.CoreWebView2.ExecuteScriptAsync(
+                            "getComputedStyle(avatarActive).opacity === '1' ? 'A' : getComputedStyle(avatarBase).opacity === '0.8' ? 'b' : '?'");
+                        turns.Add(o.Trim('"'));
+                        await Task.Delay(40);
+                    }
+                    Console.WriteLine($"page while writing (A = active, b = base, every 40 ms): {string.Concat(turns)}");
+                    Shot("i4-talking.png");
+                    for (int i = 0; i < 80; i++)
+                    {
+                        await Task.Delay(250);
+                        var o = await Opacities();
+                        if (o.StartsWith("\"[\\\"0.8")) { Console.WriteLine($"page after writing (+{(i + 1) * 250} ms): {o}"); break; }
+                    }
+                    Shot("i5-done.png");
+
+                    // ---- glitch probe: frames of the real window (the preview included), while idle, while a setting
+                    // changes quickly, and when the tile picture is taken; then the clear race, run in the page itself.
+                    var probe = Path.Combine(args[2], "probe");
+                    Directory.CreateDirectory(probe);
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                    var previewBox = preview.TransformToAncestor(window).TransformBounds(new Rect(0, 0, preview.ActualWidth, preview.ActualHeight));
+                    var dpi = VisualTreeHelper.GetDpi(window);
+                    var region = new Int32Rect((int)(previewBox.X * dpi.DpiScaleX), (int)(previewBox.Y * dpi.DpiScaleY),
+                        (int)(previewBox.Width * dpi.DpiScaleX), (int)(previewBox.Height * dpi.DpiScaleY));
+                    var frames = new List<(string Label, long Ms, string Hash)>();
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+                    int frameNo = 0;
+                    void Frame(string label)
+                    {
+                        var shot = Native.PrintWindow(hwnd);
+                        if (shot is null) return;
+                        var crop = new CroppedBitmap(shot, new Int32Rect(region.X, region.Y,
+                            Math.Min(region.Width, shot.PixelWidth - region.X), Math.Min(region.Height, shot.PixelHeight - region.Y)));
+                        var pixels = new byte[crop.PixelWidth * crop.PixelHeight * 4];
+                        crop.CopyPixels(pixels, crop.PixelWidth * 4, 0);
+                        var hash = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(pixels))[..8];
+                        frames.Add((label, clock.ElapsedMilliseconds, hash));
+                        var enc = new PngBitmapEncoder();
+                        enc.Frames.Add(BitmapFrame.Create(crop));
+                        using var file = File.Create(Path.Combine(probe, $"{frameNo++:000}-{label}.png"));
+                        enc.Save(file);
+                    }
+                    // scripts that take a while: started, then asked for their answer until it is there
+                    async Task<string> RunAsync(string body)
+                    {
+                        await preview.CoreWebView2.ExecuteScriptAsync("window.__probe = undefined; (async () => { " + body + " })().then(r => window.__probe = String(r), e => window.__probe = 'error ' + e)");
+                        for (int i = 0; i < 400; i++)
+                        {
+                            await Task.Delay(50);
+                            var got = await preview.CoreWebView2.ExecuteScriptAsync("window.__probe === undefined ? null : window.__probe");
+                            if (got != "null") return got;
+                        }
+                        return "(no answer)";
+                    }
+                    Console.WriteLine("after the demo (sentences, needed height, box height): " + await RunAsync("while (working) await new Promise(r => setTimeout(r, 100)); return box.children.length + ' ' + box.scrollHeight + ' ' + box.clientHeight;"));
+                    await Task.Delay(1500); // the tile picture after the demo
+                    if (args.Length > 6)
+                    {
+                        // as in the recording: 800 wide, the avatar inside the frame on the left, then the editor opened afresh
+                        t.CanvasWidth = 800; t.AvatarX = 20; t.AvatarY = 20; t.AvatarWidth = 110; t.AvatarHeight = 110;
+                        obs.BackCommand.Execute(null); await Task.Delay(500); obs.Editing = t;
+                        for (int i = 0; i < 50; i++) { Frame("enter"); await Task.Delay(60); }
+                    }
+                    for (int i = 0; i < 10; i++) { Frame("idle"); await Task.Delay(100); }
+                    for (int i = 0; i < 16; i++) { t.FontSize = 25 + i; Frame("drag"); await Task.Delay(40); }
+                    // the tile picture is taken 0.9 s after the last change: watch that moment closely
+                    for (int i = 0; i < 30; i++) { Frame("after"); await Task.Delay(50); }
+                    t.FontSize = 25;
+                    string Summary(string label)
+                    {
+                        var run = frames.Where(f => f.Label == label).ToList();
+                        return $"{label}: {run.Count} frames, {run.Select(f => f.Hash).Distinct().Count()} different: " +
+                               string.Join(" ", run.Select(f => f.Hash[..3]));
+                    }
+                    Console.WriteLine($"probe frames ({region.Width}x{region.Height}), first idle frame blank: {frames.FirstOrDefault().Hash}");
+                    foreach (var label in new[] { "enter", "idle", "drag", "after" }) Console.WriteLine("  " + Summary(label));
+
+                    // the race: a sentence that arrives while the box fades out must stay on screen
+                    var race = await RunAsync(@"
+                        const wait = ms => new Promise(r => setTimeout(r, ms));
+                        receive('First sentence.');
+                        while (working) await wait(50);
+                        clearBox(true);
+                        await wait(60);
+                        receive('Second sentence.');
+                        await wait((style.clearDuration || 0) + 400);
+                        while (working) await wait(50);
+                        return 'class=[' + box.className + '] text=[' + box.textContent + ']';");
+                    Console.WriteLine($"race (sentence during the fade): {race}");
+                    // clear delay: hidden 3 s after the last sentence, back with the next
+                    var avatarClear = await RunAsync(@"
+                        const wait = ms => new Promise(r => setTimeout(r, ms));
+                        const o = () => getComputedStyle(avatar).opacity;
+                        const shown = o();
+                        await wait(3600);
+                        const later = o();
+                        receive('Back again.');
+                        await wait(100);
+                        return 'after the sentence ' + shown + ', 3.6 s later ' + later + ', with the next ' + o();");
+                    Console.WriteLine($"avatar clear: {avatarClear}");
+                    // no overlap: the text's left edge against the avatar's right edge (the avatar is on the right here)
+                    var overlap = await preview.CoreWebView2.ExecuteScriptAsync(
+                        "(() => { const a = avatar.getBoundingClientRect(), r = document.createRange(); r.selectNodeContents(box); const t = r.getBoundingClientRect();" +
+                        " return 'text right ' + Math.round(t.right) + ' avatar left ' + Math.round(a.left) + ' box padding ' + getComputedStyle(box).padding; })()");
+                    Console.WriteLine($"overlap (avatar right): {overlap}");
+                    t.AvatarX = 20; t.AvatarY = 40; await Task.Delay(400);
+                    overlap = await preview.CoreWebView2.ExecuteScriptAsync(
+                        "(() => { const a = avatar.getBoundingClientRect(), r = document.createRange(); r.selectNodeContents(box); const t = r.getBoundingClientRect();" +
+                        " return 'text left ' + Math.round(t.left) + ' avatar right ' + Math.round(a.right) + ' box padding ' + getComputedStyle(box).padding; })()");
+                    Console.WriteLine($"overlap (avatar left, inside the frame): {overlap}");
+                    t.AutoWidth = true; await Task.Delay(400);
+                    overlap = await preview.CoreWebView2.ExecuteScriptAsync(
+                        "(() => { const a = avatar.getBoundingClientRect(), b = box.getBoundingClientRect();" +
+                        " return 'box left ' + Math.round(b.left) + ' avatar right ' + Math.round(a.right) + ' canvas padding ' + getComputedStyle(document.getElementById(\"canvas\")).padding; })()");
+                    Console.WriteLine($"overlap (auto width: the box moves aside): {overlap}");
+                    await preview.CoreWebView2.ExecuteScriptAsync("window.walktalkDemo()");
+                    await Task.Delay(1500);
+                    Frame("left-avatar");
+                    t.AutoWidth = false;
+                    await Task.Delay(400);
+                    Frame("left-avatar-full");
+
+                    // saved with the settings, and the files go away with the text template
+                    obs.BackCommand.Execute(null);
+                    await Task.Delay(1500);
+                    Shot("i6-list.png");
+                    var savedImport = StateStore.Load().ObsCanvases.FirstOrDefault(c => c.Id == t.Id);
+                    Console.WriteLine($"saved: avatar {savedImport?.Avatar} \"{savedImport?.AvatarImage}\" \"{savedImport?.AvatarActiveImage}\" {savedImport?.AvatarX},{savedImport?.AvatarY} fit {savedImport?.ImageFit}");
+                    var files = Directory.GetFiles(WhisperStt.Core.Obs.OverlayImages.Directory, t.Id + "*").Select(Path.GetFileName).ToList();
+                    Console.WriteLine($"files: {string.Join(", ", files)}");
+                    obs.ImportTemplates([args[4]]);
+                    Console.WriteLine($"imported again: \"{obs.Editing?.Name}\", templates {obs.Canvases.Count}");
+                    obs.Editing = t;
+                    obs.DeleteCommand.Execute(null);
+                    obs.DeleteCommand.Execute(null);
+                    Console.WriteLine($"after delete: files left {Directory.GetFiles(WhisperStt.Core.Obs.OverlayImages.Directory, t.Id + "*").Length}, templates {obs.Canvases.Count}");
+                    obs.IsOpen = false;
                     window.Closed += (_, _) => app.Shutdown();
                     window.Close();
                     return;
@@ -823,5 +1060,44 @@ public static class Program
         using (var file = File.Create(output))
             encoder.Save(file);
         content.ClearValue(Panel.BackgroundProperty);
+    }
+}
+
+// A picture of a window as Windows composes it (the WebView2 preview included, which WPF's own capture leaves out).
+static class Native
+{
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hwnd);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hwnd, IntPtr hdc);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int w, int h);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr hdc, IntPtr obj);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr obj);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr hdc);
+    struct RECT { public int Left, Top, Right, Bottom; }
+
+    public static BitmapSource? PrintWindow(IntPtr hwnd)
+    {
+        if (!GetWindowRect(hwnd, out var r)) return null;
+        int w = r.Right - r.Left, h = r.Bottom - r.Top;
+        var screen = GetDC(IntPtr.Zero);
+        var dc = CreateCompatibleDC(screen);
+        var bmp = CreateCompatibleBitmap(screen, w, h);
+        var old = SelectObject(dc, bmp);
+        try
+        {
+            if (!PrintWindow(hwnd, dc, 2)) return null; // PW_RENDERFULLCONTENT
+            var source = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(bmp, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            source.Freeze();
+            return source;
+        }
+        finally
+        {
+            SelectObject(dc, old);
+            DeleteObject(bmp);
+            DeleteDC(dc);
+            ReleaseDC(IntPtr.Zero, screen);
+        }
     }
 }

@@ -160,6 +160,8 @@ public sealed class OverlayServer : IDisposable
                 Send(response, OverlayImages.ContentType(image), File.ReadAllBytes(image));
             else if (path.StartsWith("/sound/", StringComparison.Ordinal) && SoundOf(path["/sound/".Length..]) is { } sound)
                 Send(response, OverlayImages.SoundContentType(sound), File.ReadAllBytes(sound));
+            else if (path.StartsWith("/avatar/", StringComparison.Ordinal) && AvatarOf(path["/avatar/".Length..]) is { } avatar)
+                Send(response, OverlayImages.ContentType(avatar), File.ReadAllBytes(avatar));
             else
             {
                 response.StatusCode = 404;
@@ -190,6 +192,25 @@ public sealed class OverlayServer : IDisposable
                 return null;
             var sound = canvas.Sounds().FirstOrDefault(s => s.Slot == parts[1]).Sound;
             return sound is { Kind: "file" } ? OverlayImages.PathOf(sound.File) : null;
+        }
+    }
+
+    // "/avatar/<canvas>/base" or ".../active": one of the avatar's two pictures.
+    private string? AvatarOf(string rest)
+    {
+        var parts = rest.Split('/');
+        if (parts.Length != 2)
+            return null;
+        lock (_gate)
+        {
+            if (!_canvases.TryGetValue(parts[0], out var canvas))
+                return null;
+            return parts[1] switch
+            {
+                "base" => OverlayImages.PathOf(canvas.AvatarImage),
+                "active" => OverlayImages.PathOf(canvas.AvatarActiveImage),
+                _ => null
+            };
         }
     }
 

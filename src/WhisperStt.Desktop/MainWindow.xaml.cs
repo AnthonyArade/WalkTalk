@@ -97,16 +97,29 @@ public partial class MainWindow : Window
             double Get(string name) => rect.RootElement.TryGetProperty(name, out var v) ? v.GetDouble() : 0;
             if (Get("w") < 2 || Get("h") < 2)
                 return;
-            var clip = new { x = Get("x"), y = Get("y"), width = Get("w"), height = Get("h"), scale = 1 };
-            var shot = await web.CallDevToolsProtocolMethodAsync("Page.captureScreenshot",
-                System.Text.Json.JsonSerializer.Serialize(new { format = "png", clip, captureBeyondViewport = false }));
-            using var result = System.Text.Json.JsonDocument.Parse(shot);
-            var png = Convert.FromBase64String(result.RootElement.GetProperty("data").GetString() ?? "");
-            WhisperStt.Core.Obs.OverlayImages.SaveThumbnail(canvas.Id, png);
+            // A copy of what the preview already shows, cut to the canvas. (The browser's own screenshot of an area
+            // re-lays out the page to take it, which made the preview jump for a moment.)
+            using var shot = new System.IO.MemoryStream();
+            await web.CapturePreviewAsync(Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Png, shot);
+            shot.Position = 0;
+            var full = System.Windows.Media.Imaging.BitmapFrame.Create(shot, System.Windows.Media.Imaging.BitmapCreateOptions.None,
+                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+            var scale = ObsPreview.ActualWidth > 0 ? full.PixelWidth / ObsPreview.ActualWidth : 1; // page px to image px
+            int x = (int)Math.Max(0, Math.Floor(Get("x") * scale)), y = (int)Math.Max(0, Math.Floor(Get("y") * scale));
+            int w = (int)Math.Min(full.PixelWidth - x, Math.Ceiling(Get("w") * scale)), h = (int)Math.Min(full.PixelHeight - y, Math.Ceiling(Get("h") * scale));
+            if (w < 2 || h < 2)
+                return;
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(
+                new System.Windows.Media.Imaging.CroppedBitmap(full, new Int32Rect(x, y, w, h))));
+            using var png = new System.IO.MemoryStream();
+            encoder.Save(png);
+            WhisperStt.Core.Obs.OverlayImages.SaveThumbnail(canvas.Id, png.ToArray());
             canvas.LoadThumbnail();
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException
-                                       or System.Text.Json.JsonException or FormatException or System.IO.IOException or UnauthorizedAccessException)
+                                       or System.Text.Json.JsonException or FormatException or System.IO.IOException or UnauthorizedAccessException
+                                       or NotSupportedException or ArgumentException)
         {
             // The tile keeps its previous picture.
         }
@@ -134,6 +147,8 @@ public partial class MainWindow : Window
                 await ObsPreview.EnsureCoreWebView2Async(environment);
                 ObsPreview.CoreWebView2!.Settings.AreDefaultContextMenusEnabled = false;
                 ObsPreview.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                // A file dropped on the preview would open in it; templates are dropped on the rest of the dialog.
+                ObsPreview.AllowExternalDrop = false;
                 // A freshly loaded preview (fonts included, given a moment) is photographed for the tile.
                 ObsPreview.CoreWebView2.NavigationCompleted += (_, _) =>
                 {
@@ -189,6 +204,47 @@ public partial class MainWindow : Window
                 nameBox.SelectAll();
             }
         }, DispatcherPriority.Loaded);
+    }
+
+    // -- Curses templates (.cursestmp) dropped on the OBS dialog: a hint while dragging, an import on drop
+
+    private static List<string> DroppedTemplates(DragEventArgs e) =>
+        e.Data.GetData(DataFormats.FileDrop) is string[] files ? files.Where(ObsViewModel.CanImport).ToList() : [];
+
+    private void ObsDialog_DragOver(object sender, DragEventArgs e)
+    {
+        var any = DroppedTemplates(e).Count > 0;
+        e.Effects = any ? DragDropEffects.Copy : DragDropEffects.None;
+        ShowDropHint(any);
+        e.Handled = true;
+    }
+
+    // Leaving a child element raises DragLeave too: hide the hint only when the pointer left the dialog itself.
+    private void ObsDialog_DragLeave(object sender, DragEventArgs e)
+    {
+        if (sender is FrameworkElement dialog)
+        {
+            var at = e.GetPosition(dialog);
+            if (at.X > 0 && at.Y > 0 && at.X < dialog.ActualWidth && at.Y < dialog.ActualHeight)
+                return;
+        }
+        ShowDropHint(false);
+    }
+
+    // The preview is a separate browser window drawn over everything in the dialog: hidden while the hint shows.
+    private void ShowDropHint(bool show)
+    {
+        ObsDropHint.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        ObsPreview.Visibility = show ? Visibility.Hidden : Visibility.Visible;
+    }
+
+    private void ObsDialog_Drop(object sender, DragEventArgs e)
+    {
+        ShowDropHint(false);
+        var files = DroppedTemplates(e);
+        if (files.Count > 0)
+            _viewModel.Obs.ImportTemplates(files);
+        e.Handled = true;
     }
 
     // A click on the dimmed area around a dialog closes it; clicks inside the dialog don't.
